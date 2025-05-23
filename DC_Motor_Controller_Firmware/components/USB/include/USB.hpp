@@ -3,43 +3,43 @@
 #include "tusb_cdc_acm.h"
 
 namespace DC_Motor_Controller_Firmware {
-    namespace USB {
-            class USB {
-                typedef struct {
-                    uint8_t buffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];     
-                    size_t bufferSize;                                     
-                    uint8_t itf;                                       
-                } usbMessage;
+namespace USB {
+class USB {
+  typedef struct {
+    uint8_t buffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
+    size_t bufferSize;
+    uint8_t itf;
+  } usbMessage;
 
-                public:
-                    USB();
-                    
-                    esp_err_t init();
-                    esp_err_t sendData(uint8_t *data, size_t dataSize);
-                    esp_err_t receiveData(uint8_t *data, size_t *rxBufferSize);
+public:
+  USB();
 
-                    esp_err_t sendFormattedString(const char *fmt, ...);
-                    esp_err_t sendString(const char *str);
+  esp_err_t init();
+  esp_err_t sendData(uint8_t *data, size_t dataSize);
+  esp_err_t receiveData(uint8_t *data, size_t *rxBufferSize);
 
-                    bool usbIsConnected() const;
-                    bool newDataIsReceived() const;
+  esp_err_t sendFormattedString(const char *fmt, ...);
+  esp_err_t sendString(const char *str);
 
-                    void flushRxBuffer();
+  bool usbIsConnected() const;
+  bool newDataIsReceived() const;
 
-                private:
-                    static void usbCallback(int itf, cdcacm_event_t *event);
-                    static void serialPortState(int itf, cdcacm_event_t *event);
+  void flushRxBuffer();
 
-                    static bool serialIsOpen;
-                    bool isInitialized = false;
+private:
+  static void usbCallback(int itf, cdcacm_event_t *event);
+  static void serialPortState(int itf, cdcacm_event_t *event);
 
-                    static usbMessage message;
-                    static uint8_t rxBuffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
-                    static size_t rxSize;
+  static bool serialIsOpen;
+  bool isInitialized = false;
 
-                    static const char *TAG;
+  static usbMessage message;
+  static uint8_t rxBuffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];
+  static size_t rxSize;
 
-                    static tinyusb_cdcacm_itf_t USB_INTERFACE_PORT;
-            };
-    }
-}
+  static const char *TAG;
+
+  static tinyusb_cdcacm_itf_t USB_INTERFACE_PORT;
+};
+} // namespace USB
+} // namespace DC_Motor_Controller_Firmware

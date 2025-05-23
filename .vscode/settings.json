@@ -1,0 +1,7 @@
+{
+    "idf.pythonInstallPath": "/home/ricsi/.espressif/python_env/idf5.4_py3.12_env/bin/python",
+    "files.associations": {
+        "cstdint": "cpp"
+    },
+    "cmake.sourceDirectory": "/home/ricsi/Documents/EmbedCore/DC-Motor-Controller-Firmware/DC_Motor_Controller_Firmware/components/DRV8876"
+}

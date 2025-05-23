@@ -5,64 +5,62 @@
 #include "esp_attr.h"
 
 namespace DC_Motor_Controller_Firmware {
-    namespace DRV8876 {
-        enum class Direction : bool {
-            LEFT = false,
-            RIGHT = true
-        };
+namespace DRV8876 {
+enum class Direction : bool { LEFT = false, RIGHT = true };
 
-        class DRV8876 {
-        public:
-            DRV8876(gpio_num_t phPin, gpio_num_t enPin, gpio_num_t nFault, ledc_channel_t pwmChannel);
+class DRV8876 {
+public:
+  DRV8876(gpio_num_t phPin, gpio_num_t enPin, gpio_num_t nFault,
+          ledc_channel_t pwmChannel);
 
-            esp_err_t init();
+  esp_err_t init();
 
-            void setDirection(Direction direction);  
-            void reverseDirection();
+  void setDirection(Direction direction);
+  void reverseDirection();
 
-            esp_err_t setSpeed(uint8_t speed);
-            void stop();
+  esp_err_t setSpeed(uint8_t speed);
+  void stop();
 
-            uint8_t getMotorSpeed() const;
-            Direction getMotorDirection() const;
+  uint8_t getMotorSpeed() const;
+  Direction getMotorDirection() const;
 
-            bool motorIsRunning() const;
+  bool motorIsRunning() const;
 
-            bool isFaultTriggered() const;
-            void clearFaultFlag();
+  bool isFaultTriggered() const;
+  void clearFaultFlag();
 
-            esp_err_t setPwmValue(ledc_timer_bit_t resolution, uint32_t frequency = 20000);
+  esp_err_t setPwmValue(ledc_timer_bit_t resolution,
+                        uint32_t frequency = 20000);
 
-        private:
-            esp_err_t setPwmDuty(ledc_channel_t pwmChannel, uint8_t duty);
+private:
+  esp_err_t setPwmDuty(ledc_channel_t pwmChannel, uint8_t duty);
 
-            static IRAM_ATTR void faultISR(void* arg);
-            
-            gpio_num_t phPin;
-            gpio_num_t enPin;
-            gpio_num_t nFault;
-            ledc_channel_t pwmChannel;
+  static IRAM_ATTR void faultISR(void *arg);
 
-            ledc_timer_bit_t resolution = LEDC_TIMER_10_BIT;
-            uint32_t frequency = 20000;
+  gpio_num_t phPin;
+  gpio_num_t enPin;
+  gpio_num_t nFault;
+  ledc_channel_t pwmChannel;
 
-            Direction motorDirection;
-            uint8_t motorSpeed;
+  ledc_timer_bit_t resolution = LEDC_TIMER_10_BIT;
+  uint32_t frequency = 20000;
 
-            volatile bool faultTriggered = false;
+  Direction motorDirection;
+  uint8_t motorSpeed;
 
-            const uint8_t minMotorSpeed = 0;
-            const uint8_t maxMotorSpeed = 100;
+  volatile bool faultTriggered = false;
 
-            const uint32_t MIN_PWM_FREQ = 1000; 
-            const uint32_t MAX_PWM_FREQ = 30000;    
+  const uint8_t minMotorSpeed = 0;
+  const uint8_t maxMotorSpeed = 100;
 
-            const uint8_t motorStop = 0;
+  const uint32_t MIN_PWM_FREQ = 1000;
+  const uint32_t MAX_PWM_FREQ = 30000;
 
-            bool isInitialized = false;
+  const uint8_t motorStop = 0;
 
-            const char *TAG = "DRV8876";
-        };
-    }
-}
+  bool isInitialized = false;
 
+  const char *TAG = "DRV8876";
+};
+} // namespace DRV8876
+} // namespace DC_Motor_Controller_Firmware
