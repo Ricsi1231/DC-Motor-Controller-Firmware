@@ -1,0 +1,46 @@
+name: Build ESP32-S3 Firmware
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install ESP-IDF
+        run: |
+          git clone --recursive https://github.com/espressif/esp-idf.git
+          cd esp-idf
+          ./install.sh
+
+      - name: Install clang-format
+        run: sudo apt update && sudo apt install -y clang-format
+
+      - name: Format check and build (ESP32-S3)
+        run: |
+          . ./esp-idf/export.sh
+
+          echo "🔍 Running clang-format (excluding ESP-IDF and auto components)..."
+          find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
+            -not -path "./build/*" \
+            -not -path "./esp-idf/*" \
+            -not -path "./managed_components/*" \
+            -not -path "./components/esp_*/*" \
+            -exec clang-format --dry-run --Werror {} +
+
+          echo "🔧 Building firmware..."
+          cd DC_Motor_Controller_Firmware
+          idf.py set-target esp32s3
+          idf.py build
