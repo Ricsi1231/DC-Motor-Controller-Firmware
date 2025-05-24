@@ -6,7 +6,7 @@ namespace DC_Motor_Controller_Firmware {
 namespace Communication {
 class MotorCommHandler {
 public:
-  MotorCommHandler(USB::USB &usbRef);
+  explicit MotorCommHandler(USB::USB &usbRef);
 
   void process();
 
