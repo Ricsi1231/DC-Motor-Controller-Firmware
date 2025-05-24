@@ -19,20 +19,26 @@ jobs:
         with:
           python-version: 3.11
 
+      - name: Install tools
+        run: |
+          sudo apt update
+          sudo apt install -y clang-format cppcheck
+
       - name: Install ESP-IDF
         run: |
           git clone --recursive https://github.com/espressif/esp-idf.git
           cd esp-idf
           ./install.sh
 
-      - name: Install clang-format
-        run: sudo apt update && sudo apt install -y clang-format
-
-      - name: Format check and build (ESP32-S3)
+      - name: Build firmware (ESP32-S3)
         run: |
           . ./esp-idf/export.sh
+          idf.py set-target esp32s3
+          idf.py build
 
-          echo "🔍 Running clang-format (excluding ESP-IDF and auto components)..."
+      - name: Run clang-format
+        run: |
+          echo "Running clang-format (excluding ESP-IDF and managed stuff)..."
           find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
             -not -path "./build/*" \
             -not -path "./esp-idf/*" \
@@ -40,7 +46,22 @@ jobs:
             -not -path "./components/esp_*/*" \
             -exec clang-format --dry-run --Werror {} +
 
-          echo "🔧 Building firmware..."
-          cd DC_Motor_Controller_Firmware
-          idf.py set-target esp32s3
-          idf.py build
+      - name: Run cppcheck
+        run: |
+          echo "Running cppcheck..."
+          cppcheck --enable=all --inconclusive --error-exitcode=1 \
+          --suppress=missingInclude \
+          --suppress=missingIncludeSystem \
+          --suppress=unusedStructMember \
+          --quiet \
+          --force \
+          --inline-suppr \
+          -i esp-idf \
+          -i managed_components \
+          -i build \
+          -i components/esp_* \
+          --file-list=<(find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
+            -not -path "./esp-idf/*" \
+            -not -path "./managed_components/*" \
+            -not -path "./build/*" \
+            -not -path "./components/esp_*/*")
