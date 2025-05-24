@@ -101,7 +101,7 @@ void USB::usbCallback(int itf, cdcacm_event_t *event) {
   message.itf = itf;
   taskEXIT_CRITICAL_ISR(&usbSpinLock);
 
-  ESP_LOGW(TAG, "Raw message: '%s'", reinterpret_cast<char *> rxBuffer);
+  ESP_LOGW(TAG, "Raw message: '%s'", reinterpret_cast<char *>(rxBuffer));
 }
 
 esp_err_t USB::receiveData(uint8_t *data, size_t *rxBufferSize) {
