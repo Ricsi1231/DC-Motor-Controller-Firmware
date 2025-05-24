@@ -101,7 +101,7 @@ void USB::usbCallback(int itf, cdcacm_event_t *event) {
   message.itf = itf;
   taskEXIT_CRITICAL_ISR(&usbSpinLock);
 
-  ESP_LOGW(TAG, "Raw message: '%s'", (char *)rxBuffer);
+  ESP_LOGW(TAG, "Raw message: '%s'", reinterpret_cast<char *> rxBuffer);
 }
 
 esp_err_t USB::receiveData(uint8_t *data, size_t *rxBufferSize) {
@@ -179,8 +179,8 @@ esp_err_t USB::sendString(const char *str) {
            serialIsOpen, isInitialized);
 
   size_t dataSize = strlen(str);
-  usbDataSize = tinyusb_cdcacm_write_queue(USB_INTERFACE_PORT,
-                                           (const uint8_t *)str, dataSize);
+  usbDataSize = tinyusb_cdcacm_write_queue(
+      USB_INTERFACE_PORT, reinterpret_cast<const uint8_t *>(str), dataSize);
 
   if (usbDataSize != dataSize) {
     ESP_LOGW(TAG, "USB sendString - Not all bytes queued.");
