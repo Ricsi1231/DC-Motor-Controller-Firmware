@@ -1,8 +1,8 @@
 #include "MotorControl.hpp"
+#include "MotorControlConfig.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cmath>
-#include "MotorControlConfig.hpp"
 
 using namespace DC_Motor_Controller_Firmware::L298N;
 using namespace DC_Motor_Controller_Firmware::DRV8876;
@@ -21,19 +21,19 @@ MotorControl::MotorControl(DRV8876 &driver, Encoder &encoder, PID &pid)
       driverType(DriverType::DRV8876_DRIVER) {}
 
 esp_err_t MotorControl::init() {
-   esp_err_t status = ESP_OK; 
+  esp_err_t status = ESP_OK;
 
-  if(DriverType::DRV8876_DRIVER) {
+  if (DriverType::DRV8876_DRIVER) {
     status = drv.init();
 
-    if(status != ESP_OK) {
+    if (status != ESP_OK) {
       ESP_LOGW(TAG, "motorControl init - Error with DRV IC init");
       return ESP_FAIL;
     }
   } else {
     status = l298n.init();
 
-    if(status != ESP_OK) {
+    if (status != ESP_OK) {
       ESP_LOGW(TAG, "motorControl init - Error with l298n IC init");
       return ESP_FAIL;
     }
@@ -41,9 +41,9 @@ esp_err_t MotorControl::init() {
 
   status = encoder.init();
 
-  if(status != ESP_OK) {
-      ESP_LOGW(TAG, "motorControl init - Error with encoder init");
-      return ESP_FAIL;
+  if (status != ESP_OK) {
+    ESP_LOGW(TAG, "motorControl init - Error with encoder init");
+    return ESP_FAIL;
   }
 
   pid.setParameters(PID_KP, PID_KI, PID_KD, PID_KF);
@@ -55,7 +55,7 @@ esp_err_t MotorControl::init() {
   pid.setSetpointRange(PID_SETPOINT_RANGE);
   pid.setOutputFilter(PID_FILTER_STRENGTH);
 
-   return ESP_OK;
+  return ESP_OK;
 }
 
 bool MotorControl::atTarget() const {
