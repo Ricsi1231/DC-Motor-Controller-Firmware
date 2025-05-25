@@ -13,11 +13,11 @@ using namespace DC_Motor_Controller_Firmware::motorControl::config;
 namespace DC_Motor_Controller_Firmware {
 namespace motorControl {
 MotorControl::MotorControl(L298N &driver, Encoder &encoder, PID &pid)
-    : l298n(&driver), encoder(encoder), pid(pid),
+    : l298n(driver), encoder(encoder), pid(pid),
       driverType(DriverType::L298N_DRIVER) {}
 
 MotorControl::MotorControl(DRV8876 &driver, Encoder &encoder, PID &pid)
-    : drv(&driver), encoder(encoder), pid(pid),
+    : drv(driver), encoder(encoder), pid(pid),
       driverType(DriverType::DRV8876_DRIVER) {}
 
 esp_err_t MotorControl::init() {
