@@ -96,6 +96,8 @@ void MotorControl::setPositionDegrees(float degrees) {
     l298n.stop();
   if (driverType == DriverType::DRV8876_DRIVER)
     drv.stop();
+
+    ESP_LOGD(TAG, "Current position: %.2f", currentPosition);
 }
 
 } // namespace motorControl
