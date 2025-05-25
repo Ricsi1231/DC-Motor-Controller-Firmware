@@ -23,7 +23,7 @@ MotorControl::MotorControl(DRV8876 &driver, Encoder &encoder, PID &pid)
 esp_err_t MotorControl::init() {
   esp_err_t status = ESP_OK;
 
-  if (DriverType::DRV8876_DRIVER) {
+  if (driverType == DriverType::DRV8876_DRIVER) {
     status = drv.init();
 
     if (status != ESP_OK) {
