@@ -40,6 +40,8 @@ private:
 
   float currentPosition = 0.0f;
   float targetPosition = 0.0f;
+
+  const char *TAG = "MotorControl";
 };
 
 } // namespace motorControl

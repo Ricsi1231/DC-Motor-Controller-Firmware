@@ -18,7 +18,34 @@ MotorControl::MotorControl(DRV8876 &driver, Encoder &encoder, PID &pid)
     : drv(&driver), encoder(encoder), pid(pid),
       driverType(DriverType::DRV8876_DRIVER) {}
 
-esp_err_t MotorControl::init() { esp_err_t status = ESP_OK; }
+esp_err_t MotorControl::init() {
+   esp_err_t status = ESP_OK; 
+
+  if(DriverType::DRV8876_DRIVER) {
+    status = drv->init();
+
+    if(status != ESP_OK) {
+      ESP_LOGW(TAG, "motorControl init - Error with DRV IC init");
+      return ESP_FAIL;
+    }
+  } else {
+    status = l298n->init();
+
+    if(status != ESP_OK) {
+      ESP_LOGW(TAG, "motorControl init - Error with l298n IC init");
+      return ESP_FAIL;
+    }
+  }
+
+  status = encoder.init();
+
+  if(status != ESP_OK) {
+      ESP_LOGW(TAG, "motorControl init - Error with encoder init");
+      return ESP_FAIL;
+  }
+
+   return ESP_OK;
+}
 
 bool MotorControl::atTarget() const {
   float error = targetPosition - encoder.getPositionInDegrees();
