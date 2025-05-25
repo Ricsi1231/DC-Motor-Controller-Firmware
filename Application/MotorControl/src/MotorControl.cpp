@@ -1,10 +1,10 @@
 #include "MotorControl.hpp"
 #include "MotorControlConfig.hpp"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cmath>
 
-using namespace DC_Motor_Controller_Firmware::L298N;
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::PID_Controller;
@@ -12,37 +12,21 @@ using namespace DC_Motor_Controller_Firmware::motorControl::config;
 
 namespace DC_Motor_Controller_Firmware {
 namespace motorControl {
-MotorControl::MotorControl(L298N &driver, Encoder &encoder, PID &pid)
-    : l298n(driver), encoder(encoder), pid(pid),
-      driverType(DriverType::L298N_DRIVER) {}
 
-MotorControl::MotorControl(DRV8876 &driver, Encoder &encoder, PID &pid)
-    : drv(driver), encoder(encoder), pid(pid),
-      driverType(DriverType::DRV8876_DRIVER) {}
+MotorControl::MotorControl(DRV8876::DRV8876 &driver, Encoder::Encoder &encoder,
+                           PID_Controller::PID &pid)
+    : drv(driver), encoder(encoder), pid(pid) {}
 
 esp_err_t MotorControl::init() {
-  esp_err_t status = ESP_OK;
-
-  if (driverType == DriverType::DRV8876_DRIVER) {
-    status = drv.init();
-
-    if (status != ESP_OK) {
-      ESP_LOGW(TAG, "motorControl init - Error with DRV IC init");
-      return ESP_FAIL;
-    }
-  } else {
-    status = l298n.init();
-
-    if (status != ESP_OK) {
-      ESP_LOGW(TAG, "motorControl init - Error with l298n IC init");
-      return ESP_FAIL;
-    }
+  esp_err_t status = drv.init();
+  if (status != ESP_OK) {
+    ESP_LOGW(TAG, "DRV8876 init failed");
+    return ESP_FAIL;
   }
 
   status = encoder.init();
-
   if (status != ESP_OK) {
-    ESP_LOGW(TAG, "motorControl init - Error with encoder init");
+    ESP_LOGW(TAG, "Encoder init failed");
     return ESP_FAIL;
   }
 
@@ -58,13 +42,13 @@ esp_err_t MotorControl::init() {
   return ESP_OK;
 }
 
+void MotorControl::setPidParams(float kp, float ki, float kd, float kf) {
+  pid.setParameters(kp, ki, kd, kf);
+}
+
 bool MotorControl::atTarget() const {
   float error = targetPosition - encoder.getPositionInDegrees();
   return fabs(error) < TARGET_THRESHOLD_DEG;
-}
-
-void MotorControl::setPidParams(float kp, float ki, float kd, float kf) {
-  pid.setParameters(kp, ki, kd, kf);
 }
 
 void MotorControl::applyOutput(float output) {
@@ -72,15 +56,10 @@ void MotorControl::applyOutput(float output) {
   if (speed > 100.0f)
     speed = 100.0f;
 
-  Direction dir = (output >= 0) ? Direction::RIGHT : Direction::LEFT;
-
-  if (driverType == DriverType::L298N_DRIVER) {
-    l298n.setDirection(dir);
-    l298n.setSpeed(static_cast<uint8_t>(speed));
-  } else if (driverType == DriverType::DRV8876_DRIVER) {
-    drv.setDirection(dir);
-    drv.setSpeed(static_cast<uint8_t>(speed));
-  }
+  auto dir =
+      (output >= 0) ? DRV8876::Direction::RIGHT : DRV8876::Direction::LEFT;
+  drv.setDirection(dir);
+  drv.setSpeed(static_cast<uint8_t>(speed));
 }
 
 void MotorControl::setPositionDegrees(float degrees) {
@@ -92,15 +71,11 @@ void MotorControl::setPositionDegrees(float degrees) {
     applyOutput(output);
   }
 
-  if (driverType == DriverType::L298N_DRIVER)
-    l298n.stop();
-  if (driverType == DriverType::DRV8876_DRIVER)
-    drv.stop();
-
-    ESP_LOGD(TAG, "Current position: %.2f", currentPosition);
+  drv.stop();
+  ESP_LOGD(TAG, "Final position: %.2f deg", currentPosition);
 }
 
-float MotorControl::currentPostion() const { return currentPosition; }
+float MotorControl::currentPositionDeg() const { return currentPosition; }
 
 } // namespace motorControl
 } // namespace DC_Motor_Controller_Firmware

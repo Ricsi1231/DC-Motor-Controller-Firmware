@@ -2,23 +2,15 @@
 
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
-#include "L298N.hpp"
 #include "PID.hpp"
 
 namespace DC_Motor_Controller_Firmware {
 namespace motorControl {
 
-enum class DriverType { L298N_DRIVER, DRV8876_DRIVER };
-
 class MotorControl {
 public:
-  MotorControl(DC_Motor_Controller_Firmware::L298N::L298N &driver,
-               DC_Motor_Controller_Firmware::Encoder::Encoder &encoder,
-               DC_Motor_Controller_Firmware::PID_Controller::PID &pid);
-
-  MotorControl(DC_Motor_Controller_Firmware::DRV8876::DRV8876 &driver,
-               DC_Motor_Controller_Firmware::Encoder::Encoder &encoder,
-               DC_Motor_Controller_Firmware::PID_Controller::PID &pid);
+  MotorControl(DRV8876::DRV8876 &driver, Encoder::Encoder &encoder,
+               PID_Controller::PID &pid);
 
   esp_err_t init();
 
@@ -29,16 +21,12 @@ public:
 
   bool atTarget() const;
 
-  float currentPostion() const;
+  float currentPositionDeg() const;
 
 private:
-  DC_Motor_Controller_Firmware::PID_Controller::PID &pid;
-  DC_Motor_Controller_Firmware::Encoder::Encoder &encoder;
-
-  DC_Motor_Controller_Firmware::L298N::L298N &l298n;
-  DC_Motor_Controller_Firmware::DRV8876::DRV8876 &drv;
-
-  DriverType driverType;
+  DRV8876::DRV8876 &drv;
+  Encoder::Encoder &encoder;
+  PID_Controller::PID &pid;
 
   float currentPosition = 0.0f;
   float targetPosition = 0.0f;
