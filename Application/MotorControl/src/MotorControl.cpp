@@ -60,7 +60,7 @@ esp_err_t MotorControl::init() {
 
 bool MotorControl::atTarget() const {
   float error = targetPosition - encoder.getPositionInDegrees();
-  return fabs(error) < 2.0f;
+  return fabs(error) < TARGET_THRESHOLD_DEG;
 }
 
 void MotorControl::setPidParams(float kp, float ki, float kd, float kf) {

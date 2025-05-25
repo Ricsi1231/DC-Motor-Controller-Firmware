@@ -19,6 +19,8 @@ constexpr float PID_RAMP_RATE = 10.0f;
 constexpr float PID_SETPOINT_RANGE = 5.0f;
 constexpr float PID_FILTER_STRENGTH = 0.1f;
 
+constexpr float TARGET_THRESHOLD_DEG = 2.0f;
+
 } // namespace config
 } // namespace motorControl
 } // namespace DC_Motor_Controller_Firmware
