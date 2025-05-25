@@ -100,5 +100,7 @@ void MotorControl::setPositionDegrees(float degrees) {
     ESP_LOGD(TAG, "Current position: %.2f", currentPosition);
 }
 
+float MotorControl::currentPostion() const { return currentPosition; }
+
 } // namespace motorControl
 } // namespace DC_Motor_Controller_Firmware

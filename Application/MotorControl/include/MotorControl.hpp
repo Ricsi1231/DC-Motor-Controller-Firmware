@@ -29,6 +29,8 @@ public:
 
   bool atTarget() const;
 
+  float currentPostion() const;
+
 private:
   DC_Motor_Controller_Firmware::PID_Controller::PID &pid;
   DC_Motor_Controller_Firmware::Encoder::Encoder &encoder;
