@@ -22,14 +22,14 @@ esp_err_t MotorControl::init() {
    esp_err_t status = ESP_OK; 
 
   if(DriverType::DRV8876_DRIVER) {
-    status = drv->init();
+    status = drv.init();
 
     if(status != ESP_OK) {
       ESP_LOGW(TAG, "motorControl init - Error with DRV IC init");
       return ESP_FAIL;
     }
   } else {
-    status = l298n->init();
+    status = l298n.init();
 
     if(status != ESP_OK) {
       ESP_LOGW(TAG, "motorControl init - Error with l298n IC init");
@@ -64,11 +64,11 @@ void MotorControl::applyOutput(float output) {
   Direction dir = (output >= 0) ? Direction::RIGHT : Direction::LEFT;
 
   if (driverType == DriverType::L298N_DRIVER) {
-    l298n->setDirection(dir);
-    l298n->setSpeed(static_cast<uint8_t>(speed));
+    l298n.setDirection(dir);
+    l298n.setSpeed(static_cast<uint8_t>(speed));
   } else if (driverType == DriverType::DRV8876_DRIVER) {
-    drv->setDirection(dir);
-    drv->setSpeed(static_cast<uint8_t>(speed));
+    drv.setDirection(dir);
+    drv.setSpeed(static_cast<uint8_t>(speed));
   }
 }
 
@@ -82,9 +82,9 @@ void MotorControl::setPositionDegrees(float degrees) {
   }
 
   if (driverType == DriverType::L298N_DRIVER)
-    l298n->stop();
+    l298n.stop();
   if (driverType == DriverType::DRV8876_DRIVER)
-    drv->stop();
+    drv.stop();
 }
 
 } // namespace motorControl

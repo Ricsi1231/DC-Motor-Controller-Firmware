@@ -33,8 +33,8 @@ private:
   DC_Motor_Controller_Firmware::PID_Controller::PID &pid;
   DC_Motor_Controller_Firmware::Encoder::Encoder &encoder;
 
-  DC_Motor_Controller_Firmware::L298N::L298N *l298n = nullptr;
-  DC_Motor_Controller_Firmware::DRV8876::DRV8876 *drv = nullptr;
+  DC_Motor_Controller_Firmware::L298N::L298N &l298n;
+  DC_Motor_Controller_Firmware::DRV8876::DRV8876 &drv;
 
   DriverType driverType;
 
