@@ -2,11 +2,13 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cmath>
+#include "MotorControlConfig.hpp"
 
 using namespace DC_Motor_Controller_Firmware::L298N;
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::PID_Controller;
+using namespace DC_Motor_Controller_Firmware::motorControl::config;
 
 namespace DC_Motor_Controller_Firmware {
 namespace motorControl {
@@ -43,6 +45,15 @@ esp_err_t MotorControl::init() {
       ESP_LOGW(TAG, "motorControl init - Error with encoder init");
       return ESP_FAIL;
   }
+
+  pid.setParameters(PID_KP, PID_KI, PID_KD, PID_KF);
+  pid.setOutputLimits(PID_OUTPUT_MIN, PID_OUTPUT_MAX);
+  pid.setMaxIOutput(PID_MAX_I_OUTPUT);
+  pid.setDirection(PID_REVERSED);
+  pid.setSetpoint(PID_INITIAL_SETPOINT);
+  pid.setOutputRampRate(PID_RAMP_RATE);
+  pid.setSetpointRange(PID_SETPOINT_RANGE);
+  pid.setOutputFilter(PID_FILTER_STRENGTH);
 
    return ESP_OK;
 }
