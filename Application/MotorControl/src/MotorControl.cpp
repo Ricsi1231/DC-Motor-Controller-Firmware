@@ -69,6 +69,7 @@ void MotorControl::setPositionDegrees(float degrees) {
     currentPosition = encoder.getPositionInDegrees();
     float output = pid.Update(targetPosition, currentPosition);
     applyOutput(output);
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 
   drv.stop();
