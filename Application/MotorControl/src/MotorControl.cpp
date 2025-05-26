@@ -56,8 +56,13 @@ void MotorControl::applyOutput(float output) {
   if (speed > 100.0f)
     speed = 100.0f;
 
-  auto dir =
-      (output >= 0) ? DRV8876::Direction::RIGHT : DRV8876::Direction::LEFT;
+  DRV8876::Direction dir;
+  if(output >= 0) {
+    dir = DRV8876::Direction::LEFT;
+  } else {
+    dir = DRV8876::Direction::RIGHT;
+  }
+
   drv.setDirection(dir);
   drv.setSpeed(static_cast<uint8_t>(speed));
 }
