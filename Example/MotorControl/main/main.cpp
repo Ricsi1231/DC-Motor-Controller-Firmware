@@ -31,7 +31,6 @@ pcnt_unit_config_t pcntUnit = {
     }
 };
 
-
 esp_err_t status = ESP_OK;
 
 extern "C" void app_main() {
