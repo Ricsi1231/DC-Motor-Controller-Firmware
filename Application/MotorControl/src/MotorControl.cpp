@@ -30,23 +30,24 @@ esp_err_t MotorControl::init() {
     return ESP_FAIL;
   }
 
-  defaultPidConfig.kp              = PID_KP;
-  defaultPidConfig.ki              = PID_KI;
-  defaultPidConfig.kd              = PID_KD;
-  defaultPidConfig.kf              = PID_KF;
+  defaultPidConfig.kp = PID_KP;
+  defaultPidConfig.ki = PID_KI;
+  defaultPidConfig.kd = PID_KD;
+  defaultPidConfig.kf = PID_KF;
 
-  defaultPidConfig.outputMin       = PID_OUTPUT_MIN;
-  defaultPidConfig.outputMax       = PID_OUTPUT_MAX;
-  defaultPidConfig.maxIOutput      = PID_MAX_I_OUTPUT;
-  defaultPidConfig.reversed        = PID_REVERSED;
+  defaultPidConfig.outputMin = PID_OUTPUT_MIN;
+  defaultPidConfig.outputMax = PID_OUTPUT_MAX;
+  defaultPidConfig.maxIOutput = PID_MAX_I_OUTPUT;
+  defaultPidConfig.reversed = PID_REVERSED;
   defaultPidConfig.initialSetpoint = PID_INITIAL_SETPOINT;
-  defaultPidConfig.rampRate        = PID_RAMP_RATE;
-  defaultPidConfig.setpointRange   = PID_SETPOINT_RANGE;
-  defaultPidConfig.filterStrength  = PID_FILTER_STRENGTH;
+  defaultPidConfig.rampRate = PID_RAMP_RATE;
+  defaultPidConfig.setpointRange = PID_SETPOINT_RANGE;
+  defaultPidConfig.filterStrength = PID_FILTER_STRENGTH;
 
   pidConfig = defaultPidConfig;
 
-  pid.setParameters(defaultPidConfig.kp, defaultPidConfig.ki, defaultPidConfig.kd, defaultPidConfig.kf);
+  pid.setParameters(defaultPidConfig.kp, defaultPidConfig.ki,
+                    defaultPidConfig.kd, defaultPidConfig.kf);
   pid.setOutputLimits(defaultPidConfig.outputMin, defaultPidConfig.outputMax);
   pid.setMaxIOutput(defaultPidConfig.maxIOutput);
   pid.setDirection(defaultPidConfig.reversed);
@@ -92,7 +93,7 @@ void MotorControl::applyOutput(float output) {
   float speed = fabs(output);
 
   DRV8876::Direction dir;
-  if(output >= 0) {
+  if (output >= 0) {
     dir = DRV8876::Direction::LEFT;
   } else {
     dir = DRV8876::Direction::RIGHT;
