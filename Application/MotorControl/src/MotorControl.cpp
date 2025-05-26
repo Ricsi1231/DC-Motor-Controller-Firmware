@@ -90,8 +90,6 @@ bool MotorControl::atTarget() const {
 
 void MotorControl::applyOutput(float output) {
   float speed = fabs(output);
-  if (speed > 100.0f)
-    speed = 100.0f;
 
   DRV8876::Direction dir;
   if(output >= 0) {
