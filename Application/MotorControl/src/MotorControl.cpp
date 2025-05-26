@@ -30,21 +30,56 @@ esp_err_t MotorControl::init() {
     return ESP_FAIL;
   }
 
-  pid.setParameters(PID_KP, PID_KI, PID_KD, PID_KF);
-  pid.setOutputLimits(PID_OUTPUT_MIN, PID_OUTPUT_MAX);
-  pid.setMaxIOutput(PID_MAX_I_OUTPUT);
-  pid.setDirection(PID_REVERSED);
-  pid.setSetpoint(PID_INITIAL_SETPOINT);
-  pid.setOutputRampRate(PID_RAMP_RATE);
-  pid.setSetpointRange(PID_SETPOINT_RANGE);
-  pid.setOutputFilter(PID_FILTER_STRENGTH);
+  defaultPidConfig.kp              = PID_KP;
+  defaultPidConfig.ki              = PID_KI;
+  defaultPidConfig.kd              = PID_KD;
+  defaultPidConfig.kf              = PID_KF;
+
+  defaultPidConfig.outputMin       = PID_OUTPUT_MIN;
+  defaultPidConfig.outputMax       = PID_OUTPUT_MAX;
+  defaultPidConfig.maxIOutput      = PID_MAX_I_OUTPUT;
+  defaultPidConfig.reversed        = PID_REVERSED;
+  defaultPidConfig.initialSetpoint = PID_INITIAL_SETPOINT;
+  defaultPidConfig.rampRate        = PID_RAMP_RATE;
+  defaultPidConfig.setpointRange   = PID_SETPOINT_RANGE;
+  defaultPidConfig.filterStrength  = PID_FILTER_STRENGTH;
+
+  pid.setParameters(defaultPidConfig.kp, defaultPidConfig.ki, defaultPidConfig.kd, defaultPidConfig.kf);
+  pid.setOutputLimits(defaultPidConfig.outputMin, defaultPidConfig.outputMax);
+  pid.setMaxIOutput(defaultPidConfig.maxIOutput);
+  pid.setDirection(defaultPidConfig.reversed);
+  pid.setSetpoint(defaultPidConfig.initialSetpoint);
+  pid.setOutputRampRate(defaultPidConfig.rampRate);
+  pid.setSetpointRange(defaultPidConfig.setpointRange);
+  pid.setOutputFilter(defaultPidConfig.filterStrength);
 
   return ESP_OK;
 }
 
 void MotorControl::setPidParams(float kp, float ki, float kd, float kf) {
-  pid.setParameters(kp, ki, kd, kf);
+  pidConfig.kp = kp;
+  pidConfig.ki = ki;
+  pidConfig.kd = kd;
+  pidConfig.kf = kf;
+
+  pid.setParameters(pidConfig.kp, pidConfig.ki, pidConfig.kd, pidConfig.kf);
 }
+
+void MotorControl::setPidParameters(PidConfig pidConfig) {
+  pid.setParameters(pidConfig.kp, pidConfig.ki, pidConfig.kd, pidConfig.kf);
+  pid.setOutputLimits(pidConfig.outputMin, pidConfig.outputMax);
+  pid.setMaxIOutput(pidConfig.maxIOutput);
+  pid.setDirection(pidConfig.reversed);
+  pid.setSetpoint(pidConfig.initialSetpoint);
+  pid.setOutputRampRate(pidConfig.rampRate);
+  pid.setSetpointRange(pidConfig.setpointRange);
+  pid.setOutputFilter(pidConfig.filterStrength);
+
+  this->pidConfig = pidConfig;
+}
+
+PidConfig MotorControl::getDefaultPidConfig() const { return defaultPidConfig; }
+PidConfig MotorControl::getCurrentPidConfig() const { return pidConfig; }
 
 bool MotorControl::atTarget() const {
   float error = targetPosition - encoder.getPositionInDegrees();
