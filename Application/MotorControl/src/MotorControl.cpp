@@ -44,6 +44,8 @@ esp_err_t MotorControl::init() {
   defaultPidConfig.setpointRange   = PID_SETPOINT_RANGE;
   defaultPidConfig.filterStrength  = PID_FILTER_STRENGTH;
 
+  pidConfig = defaultPidConfig;
+
   pid.setParameters(defaultPidConfig.kp, defaultPidConfig.ki, defaultPidConfig.kd, defaultPidConfig.kf);
   pid.setOutputLimits(defaultPidConfig.outputMin, defaultPidConfig.outputMax);
   pid.setMaxIOutput(defaultPidConfig.maxIOutput);
