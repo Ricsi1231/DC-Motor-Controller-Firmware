@@ -31,6 +31,7 @@ DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
 Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 
 void motorTest(bool rotation);
+void encoderTest();
                             
 extern "C" void app_main() {
   esp_err_t errorStatus = ESP_OK;
@@ -54,6 +55,10 @@ extern "C" void app_main() {
     motorTest(false);
   }
 
+  if(testEncoder) {
+    encoderTest();
+  }
+
 }
 
 void motorTest(bool rotation) {
@@ -74,4 +79,13 @@ void motorTest(bool rotation) {
     motor.setSpeed(60);
     motor.stop();
   }
+}
+
+void encoderTest() {
+  uint32_t ticks = encoder.getPositionTicks();
+  float degrees = encoder.getPositionInDegrees();
+  int32_t rpm = encoder.getPositionInRPM();
+
+  ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees,
+             rpm);
 }
