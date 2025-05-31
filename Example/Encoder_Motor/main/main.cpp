@@ -2,6 +2,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "esp_timer.h"
+#include "math.h"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 
@@ -27,11 +29,17 @@ pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
                                }};
 
 
+volatile int posi = 0; 
+long prevT = 0;
+float eprev = 0;
+float eintegral = 0;
+
 DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
 Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 
 void motorTest(bool rotation);
 void encoderTest();
+void pidMotorControl(double kp, double ki, double kd, uint8_t target);
                             
 extern "C" void app_main() {
   esp_err_t errorStatus = ESP_OK;
@@ -50,15 +58,22 @@ extern "C" void app_main() {
     ESP_LOGD(TAG, "Error with encoder init");
   }
 
-  if(testMotor) {
-    motorTest(true);
-    motorTest(false);
-  }
+  while(1) {
+      if(testMotor) {
+      motorTest(true);
+      motorTest(false);
+    }
 
-  if(testEncoder) {
-    encoderTest();
-  }
+    if(testEncoder) {
+      encoderTest();
+    }
 
+    if(pidControl) {
+      pidMotorControl(1, 0, 0, 40);
+    }
+
+      vTaskDelay(10);
+  }
 }
 
 void motorTest(bool rotation) {
@@ -88,4 +103,34 @@ void encoderTest() {
 
   ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees,
              rpm);
+}
+
+void pidMotorControl(double kp, double ki, double kd, uint8_t target) {
+  int64_t currT = esp_timer_get_time();
+  float deltaT = (float)(currT - prevT) / (1e06);
+  prevT = deltaT;
+
+  int pos = encoder.getPositionInDegrees();
+  int e = target - pos;
+
+  float dedt = (e - eprev) / (deltaT);
+  eintegral = eintegral + e * deltaT;
+
+  float u = kp * e + ki * eintegral + kd * dedt;
+
+  float motorSpeed = fabs(u);
+
+  if(motorSpeed > 100) {
+    motorSpeed = 100;
+  }
+
+  if(u < 0) {
+    motor.setDirection(Direction::LEFT);
+  } else {
+    motor.setDirection(Direction::RIGHT);
+  }
+
+  motor.setSpeed(motorSpeed);
+
+  eprev = e;
 }
