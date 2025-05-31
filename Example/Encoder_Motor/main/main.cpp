@@ -2,10 +2,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "esp_timer.h"
-#include "math.h"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
+#include "esp_timer.h"
+#include "math.h"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
@@ -28,8 +28,6 @@ pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
                                    .accum_count = true,
                                }};
 
-
-volatile int posi = 0; 
 long prevT = 0;
 float eprev = 0;
 float eintegral = 0;
@@ -40,14 +38,13 @@ Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 void motorTest(bool rotation);
 void encoderTest();
 void pidMotorControl(double kp, double ki, double kd, uint8_t target);
-                            
-extern "C" void app_main() {
-  esp_err_t errorStatus = ESP_OK;
 
-  bool testMotor = false;
-  bool testEncoder = false;
-  bool pidControl = false;
-  
+bool testMotor = false bool testEncoder = false;
+bool pidControl = false;
+
+esp_err_t errorStatus = ESP_OK;
+
+extern "C" void app_main() {
   errorStatus = motor.init();
   if (errorStatus != ESP_OK) {
     ESP_LOGD(TAG, "Error with motor init");
@@ -58,21 +55,21 @@ extern "C" void app_main() {
     ESP_LOGD(TAG, "Error with encoder init");
   }
 
-  while(1) {
-      if(testMotor) {
+  while (1) {
+    if (testMotor == true) {
       motorTest(true);
       motorTest(false);
     }
 
-    if(testEncoder) {
+    if (testEncoder == true) {
       encoderTest();
     }
 
-    if(pidControl) {
+    if (pidControl == true) {
       pidMotorControl(1, 0, 0, 40);
     }
 
-      vTaskDelay(10);
+    vTaskDelay(10);
   }
 }
 
@@ -102,7 +99,7 @@ void encoderTest() {
   int32_t rpm = encoder.getPositionInRPM();
 
   ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees,
-             rpm);
+           rpm);
 }
 
 void pidMotorControl(double kp, double ki, double kd, uint8_t target) {
@@ -120,11 +117,11 @@ void pidMotorControl(double kp, double ki, double kd, uint8_t target) {
 
   float motorSpeed = fabs(u);
 
-  if(motorSpeed > 100) {
+  if (motorSpeed > 100) {
     motorSpeed = 100;
   }
 
-  if(u < 0) {
+  if (u < 0) {
     motor.setDirection(Direction::LEFT);
   } else {
     motor.setDirection(Direction::RIGHT);
