@@ -30,7 +30,7 @@ pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
 DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
 Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 
-void testMotor(bool rotation);
+void motorTest(bool rotation);
                             
 extern "C" void app_main() {
   esp_err_t errorStatus = ESP_OK;
@@ -49,9 +49,14 @@ extern "C" void app_main() {
     ESP_LOGD(TAG, "Error with encoder init");
   }
 
+  if(testMotor) {
+    motorTest(true);
+    motorTest(false);
+  }
+
 }
 
-void testMotor(bool rotation) {
+void motorTest(bool rotation) {
   if (rotation) {
     motor.setDirection(Direction::LEFT);
     motor.setSpeed(100);
