@@ -4,11 +4,15 @@
 
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
+#include "MotorCommHandler.hpp"
+#include "USB.hpp"
 #include "esp_timer.h"
 #include "math.h"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
+using namespace DC_Motor_Controller_Firmware::USB;
+using namespace DC_Motor_Controller_Firmware::Communication;
 
 const char *TAG = "MAIN";
 
@@ -31,16 +35,23 @@ pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
 long prevT = 0;
 float eprev = 0;
 float eintegral = 0;
+uint8_t motorTarget = 0;
 
 DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
 Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 
+DC_Motor_Controller_Firmware::USB::USB usb;
+MotorCommHandler motorComm(usb);
+
 void motorTest(bool rotation);
 void encoderTest();
 void pidMotorControl(double kp, double ki, double kd, uint8_t target);
+void testLabview();
 
-bool testMotor = false bool testEncoder = false;
+bool testMotor = false;
+bool testEncoder = false;
 bool pidControl = false;
+bool labViewTest = false;
 
 esp_err_t errorStatus = ESP_OK;
 
@@ -50,9 +61,14 @@ extern "C" void app_main() {
     ESP_LOGD(TAG, "Error with motor init");
   }
 
-  encoder.init();
+  errorStatus = encoder.init();
   if (errorStatus != ESP_OK) {
     ESP_LOGD(TAG, "Error with encoder init");
+  }
+
+  errorStatus = usb.init();
+  if (errorStatus != ESP_OK) {
+    ESP_LOGD(TAG, "Error with USB init");
   }
 
   while (1) {
@@ -67,6 +83,10 @@ extern "C" void app_main() {
 
     if (pidControl == true) {
       pidMotorControl(1, 0, 0, 40);
+    }
+
+    if (labViewTest == true) {
+      testLabview();
     }
 
     vTaskDelay(10);
@@ -130,4 +150,25 @@ void pidMotorControl(double kp, double ki, double kd, uint8_t target) {
   motor.setSpeed(motorSpeed);
 
   eprev = e;
+}
+
+void testLabview() {
+  float kp = 1, ki = 0, kd = 0;
+
+  motorComm.process();
+
+  if (motorComm.isNewTargetReceived()) {
+    motorTarget = motorComm.getTargetDegrees();
+    pidMotorControl(kp, ki, kd, motorTarget);
+    motorTarget = 0;
+  }
+
+  if (motorComm.isNewPIDReceived()) {
+    motorComm.getPIDParams(kp, ki, kd);
+  }
+
+  if (motorComm.wasPIDRequested()) {
+    motorComm.getPIDParams(kp, ki, kd);
+    motorComm.sendPIDParams(kp, ki, kd);
+  }
 }
