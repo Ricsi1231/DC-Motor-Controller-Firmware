@@ -161,6 +161,7 @@ void testLabview() {
     motorTarget = motorComm.getTargetDegrees();
     pidMotorControl(kp, ki, kd, motorTarget);
     motorTarget = 0;
+    motorComm.sendMotorState(motorTarget);
   }
 
   if (motorComm.isNewPIDReceived()) {
