@@ -154,13 +154,12 @@ void pidMotorControl(double kp, double ki, double kd, uint8_t target) {
 
 void testLabview() {
   float kp = 1, ki = 0, kd = 0;
-
+  
   motorComm.process();
 
   if (motorComm.isNewTargetReceived()) {
     motorTarget = motorComm.getTargetDegrees();
     pidMotorControl(kp, ki, kd, motorTarget);
-    motorTarget = 0;
     motorComm.sendMotorState(motorTarget);
   }
 
