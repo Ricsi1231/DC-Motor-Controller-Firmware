@@ -82,6 +82,11 @@ void MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
   pidRequested = false;
 }
 
+void MotorCommHandler::clearTarget() {
+  targetDegrees = 0;
+  newTarget = false;
+}
+
 void MotorCommHandler::notifyMotorPositionReached() {
   usb.sendString(MSG_REACHED);
 }

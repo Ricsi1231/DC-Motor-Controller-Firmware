@@ -94,7 +94,7 @@ float Encoder::getPositionInDegrees() const {
   int count = 0;
   pcnt_unit_get_count(pcntUnit, &count);
 
-  float degree = (static_cast<float>(count % ppr) / ppr) * 360.0f;
+  float degree = (static_cast<float>(count) / ppr) * 360.0f;
   return degree;
 }
 

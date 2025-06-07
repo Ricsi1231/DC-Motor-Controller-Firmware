@@ -14,6 +14,8 @@ public:
   void sendPIDParams(float kp, float ki, float kd);
   void notifyMotorPositionReached();
 
+  void clearTarget();
+
   float getTargetDegrees();
   void getPIDParams(float &kp, float &ki, float &kd);
 
