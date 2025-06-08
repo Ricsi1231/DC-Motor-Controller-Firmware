@@ -66,6 +66,8 @@ MotorController motorControl(encoder, motor, pid, motorCfg);
 esp_err_t errorStatus = ESP_OK;
 
 extern "C" void app_main() {
+  float kp, ki, kd;
+
   errorStatus = motor.init();
   if (errorStatus != ESP_OK)
     ESP_LOGD(TAG, "Error with motor init");
@@ -89,13 +91,11 @@ extern "C" void app_main() {
     }
 
     if (motorComm.isNewPIDReceived()) {
-      float kp, ki, kd;
       motorComm.getPIDParams(kp, ki, kd);
       motorControl.setPID(kp, ki, kd);
     }
 
     if (motorComm.wasPIDRequested()) {
-      float kp, ki, kd;
       motorControl.getPID(kp, ki, kd);
       motorComm.sendPIDParams(kp, ki, kd);
     }
