@@ -1,6 +1,7 @@
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
+#include "PID.hpp"
 #include "USB.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -12,6 +13,7 @@ using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::USB;
 using namespace DC_Motor_Controller_Firmware::Communication;
+using namespace DC_Motor_Controller_Firmware::PID;
 
 const char *TAG = "MAIN";
 
@@ -24,26 +26,36 @@ gpio_num_t ENCODER_A = GPIO_NUM_1;
 gpio_num_t ENCODER_B = GPIO_NUM_2;
 uint16_t ppr = 1024;
 
-pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
-                               .high_limit = 1000,
-                               .flags = {
-                                   .accum_count = true,
-                               }};
+pcnt_unit_config_t pcntUnit = {
+    .low_limit = -1000,
+    .high_limit = 1000,
+    .flags = {
+        .accum_count = true,
+    }};
 
-float eprev = 0;
-float eintegral = 0;
-uint8_t motorTarget = 0;
 float setpointDegrees = 0;
 bool motionDone = true;
 
 DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
 Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
-DC_Motor_Controller_Firmware::USB::USB usb;
+USB usb;
 MotorCommHandler motorComm(usb);
+
+PidConfig defaultConfig = {
+    .kp = 1.2f,
+    .ki = 0.05f,         // ↑ stronger correction over time
+    .kd = 0.02f,         // ↓ reduce overshoot instability
+    .maxOutput = 100.0f,
+    .maxIntegral = 300.0f,
+    .errorEpsilon = 0.1f,  // ↓ better accuracy
+    .speedEpsilon = 0.2f,  // ↓ better precision
+    .errorTimeoutSec = 0.5f,
+    .stuckTimeoutSec = 0.5f,
+};
+PIDController pid(defaultConfig);
 
 void motorTest(bool rotation);
 void encoderTest();
-void pidMotorControl(double kp, double ki, double kd, float target);
 void testLabview();
 
 bool testMotor = false;
@@ -55,37 +67,19 @@ esp_err_t errorStatus = ESP_OK;
 
 extern "C" void app_main() {
   errorStatus = motor.init();
-  if (errorStatus != ESP_OK) {
-    ESP_LOGD(TAG, "Error with motor init");
-  }
+  if (errorStatus != ESP_OK) ESP_LOGD(TAG, "Error with motor init");
 
   errorStatus = encoder.init();
-  if (errorStatus != ESP_OK) {
-    ESP_LOGD(TAG, "Error with encoder init");
-  }
+  if (errorStatus != ESP_OK) ESP_LOGD(TAG, "Error with encoder init");
 
   errorStatus = usb.init();
-  if (errorStatus != ESP_OK) {
-    ESP_LOGD(TAG, "Error with USB init");
-  }
+  if (errorStatus != ESP_OK) ESP_LOGD(TAG, "Error with USB init");
 
   while (1) {
-    if (testMotor == true) {
-      motorTest(true);
-      motorTest(false);
-    }
-
-    if (testEncoder == true) {
-      encoderTest();
-    }
-
-    if (pidControl == true) {
-      pidMotorControl(1, 0, 0, 180);
-    }
-
-    if (labViewTest == true) {
-      testLabview();
-    }
+    if (testMotor) motorTest(true);
+    if (testMotor) motorTest(false);
+    if (testEncoder) encoderTest();
+    if (labViewTest) testLabview();
 
     vTaskDelay(10);
   }
@@ -115,122 +109,78 @@ void encoderTest() {
   uint32_t ticks = encoder.getPositionTicks();
   float degrees = encoder.getPositionInDegrees();
   int32_t rpm = encoder.getPositionInRPM();
-  ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees,
-           rpm);
+  ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees, rpm);
 }
-
-void pidMotorControl(double kp, double ki, double kd, float target) {
-  static int64_t prevT = 0;
-  static float lastPos = 0;
-  static int64_t stuckStartTime = 0;
-  static int64_t smallErrorStartTime = 0;
-
-  int64_t currT = esp_timer_get_time();
-  float deltaT = (float)(currT - prevT) / 1e6f;
-  if (deltaT <= 0)
-    deltaT = 0.001f;
-  prevT = currT;
-
-  float pos = encoder.getPositionInDegrees();
-  float e = target - pos;
-  float dedt = (e - eprev) / deltaT;
-  eintegral += e * deltaT;
-
-  float maxIntegral = 1000.0f;
-  if (eintegral > maxIntegral)
-    eintegral = maxIntegral;
-  if (eintegral < -maxIntegral)
-    eintegral = -maxIntegral;
-
-  float u = kp * e + ki * eintegral + kd * dedt;
-  float motorSpeed = fabs(u);
-  if (motorSpeed > 100.0f)
-    motorSpeed = 100.0f;
-
-  if (fabs(e) < 5.0f && motorSpeed < 10.0f) {
-    if (smallErrorStartTime == 0)
-      smallErrorStartTime = currT;
-    if ((currT - smallErrorStartTime) / 1e6f > 0.6f) {
-      motor.stop();
-      motionDone = true;
-      eintegral = 0;
-      eprev = 0;
-      ESP_LOGW("PID", "Forced stop due to low error + speed timeout");
-      return;
-    }
-  } else {
-    smallErrorStartTime = 0;
-  }
-
-  if (fabs(pos - lastPos) < 0.05f && motorSpeed < 7.0f) {
-    if (stuckStartTime == 0)
-      stuckStartTime = currT;
-    if ((currT - stuckStartTime) / 1e6f > 0.5f) {
-      motor.stop();
-      motionDone = true;
-      eintegral = 0;
-      eprev = 0;
-      ESP_LOGW("PID", "Forced stop due to zero motion");
-      return;
-    }
-  } else {
-    stuckStartTime = 0;
-  }
-  lastPos = pos;
-
-  if (fabs(e) < 2.0f && motorSpeed < 7.0f) {
-    motor.stop();
-    motionDone = true;
-    eintegral = 0;
-    eprev = 0;
-    return;
-  }
-
-  if (u < 0) {
-    motor.setDirection(Direction::LEFT);
-  } else {
-    motor.setDirection(Direction::RIGHT);
-  }
-
-  if (motorSpeed < 7.0f) {
-    motor.setSpeed(0);
-  } else {
-    motor.setSpeed(motorSpeed);
-  }
-
-  eprev = e;
-
-  ESP_LOGI("PID", "e=%.2f dedt=%.2f u=%.2f speed=%.2f pos=%.2f", e, dedt, u,
-           motorSpeed, pos);
-}
-
 void testLabview() {
-  float kp = 1.2, ki = 0.01, kd = 0.04;
-
   motorComm.process();
+
+  static float lastPos = 0;
+  static int stuckCounter = 0;
+  static int pidWarmupCounter = 0;
 
   if (motorComm.isNewTargetReceived()) {
     float currentPos = encoder.getPositionInDegrees();
     float offset = motorComm.getTargetDegrees();
     setpointDegrees = currentPos + offset;
 
-    eprev = 0;
-    eintegral = 0;
+    pid.reset();
     motionDone = false;
+    lastPos = currentPos;
+    stuckCounter = 0;
+    pidWarmupCounter = 0;
 
     motorComm.clearTarget();
   }
 
   if (motorComm.isNewPIDReceived()) {
+    float kp, ki, kd;
     motorComm.getPIDParams(kp, ki, kd);
+    pid.setParameters(kp, ki, kd);
   }
 
   if (motorComm.wasPIDRequested()) {
-    motorComm.getPIDParams(kp, ki, kd);
+    float kp, ki, kd;
+    pid.getParameters(kp, ki, kd);
     motorComm.sendPIDParams(kp, ki, kd);
   }
 
-  if (!motionDone) {
-    pidMotorControl(kp, ki, kd, setpointDegrees);
+  if (motionDone) {
+    float drift = setpointDegrees - encoder.getPositionInDegrees();
+    if (fabs(drift) > 1.0f) {
+      ESP_LOGI("HOLD", "Drift correction: error=%.2f", drift);
+      pid.reset();
+      motionDone = false;
+      stuckCounter = 0;
+      pidWarmupCounter = 0;
+    }
+    return;
   }
+
+  float currentPos = encoder.getPositionInDegrees();
+  float output = pid.compute(setpointDegrees, currentPos);
+
+  float speed = fabs(output);
+  if (speed < 2.0f && fabs(setpointDegrees - currentPos) > 0.2f)
+    speed = 2.0f;
+  if (speed > 100.0f) speed = 100.0f;
+
+  if (fabs(currentPos - lastPos) < 0.05f)
+    stuckCounter++;
+  else
+    stuckCounter = 0;
+  lastPos = currentPos;
+
+  if (stuckCounter > 50 || (pidWarmupCounter > 10 && pid.isSettled())) {
+    ESP_LOGW("LABVIEW", "Motion done or stuck → stopping");
+    motor.stop();
+    motionDone = true;
+    return;
+  }
+  pidWarmupCounter++;
+
+  motor.setDirection(output < 0 ? Direction::LEFT : Direction::RIGHT);
+  motor.setSpeed(speed);
 }
+
+
+
