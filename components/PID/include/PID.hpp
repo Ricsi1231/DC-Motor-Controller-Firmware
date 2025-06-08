@@ -15,12 +15,12 @@ struct PidConfig {
   float speedEpsilon = 7.0f;
   float errorTimeoutSec = 0.6f;
   float stuckTimeoutSec = 0.5f;
-  float derivativeAlpha = 1.0f; // 1.0 = no filter, 0.0 = frozen
+  float derivativeAlpha = 1.0f; 
 };
 
 class PIDController {
 public:
-  PIDController(const PidConfig &cfg);
+  explicit PIDController(const PidConfig &cfg);
   void reset();
 
   float compute(float setpoint, float actual);
