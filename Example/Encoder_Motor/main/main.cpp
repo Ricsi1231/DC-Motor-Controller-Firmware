@@ -56,6 +56,15 @@ PidConfig defaultConfig = {
 };
 PIDController pid(defaultConfig);
 
+MotorControllerConfig motorCfg = {
+    .minSpeed = 2.0f,
+    .maxSpeed = 100.0f,
+    .minErrorToMove = 0.2f,
+    .driftThreshold = 1.0f,
+    .stuckPositionEpsilon = 0.05f,
+    .stuckCountLimit = 50,
+    .pidWarmupLimit = 10,
+};
 MotorController motorControl(encoder, motor, pid);
 
 void motorTest(bool rotation);
