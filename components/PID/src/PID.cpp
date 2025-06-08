@@ -1,173 +1,95 @@
 #include "PID.hpp"
-#include <algorithm>
+#include "esp_timer.h"
+#include "math.h"
 
-namespace DC_Motor_Controller_Firmware {
-namespace PID_Controller {
-PID::PID() {
-  integrator = 0.0f;
-  prevError = 0.0f;
-  differentiator = 0.0f;
-  prevMeasurement = 0.0f;
-  out = 0.0f;
+using namespace DC_Motor_Controller_Firmware::PID;
 
-  firstRun = true;
+PIDController::PIDController(const PidConfig &cfg) : config(cfg) { reset(); }
+
+void PIDController::reset() {
+  integral = 0.0f;
+  lastError = 0.0f;
+  lastOutput = 0.0f;
+  lastDerivative = 0.0f;
+  prevMeasured = 0.0f;
+  lastTimeUs = 0;
+  stuckStartTime = 0;
+  smallErrorStartTime = 0;
+  settled = true;
 }
 
-float PID::Update(float setpoint, float measurement) {
-  double Poutput;
-  double Ioutput;
-  double Doutput;
-  double Foutput;
-  float error;
+void PIDController::setParameters(float kp, float ki, float kd) {
+  config.kp = kp;
+  config.ki = ki;
+  config.kd = kd;
+}
 
-  this->setpoint = setpoint;
+void PIDController::getParameters(float &kp, float &ki, float &kd) {
+  kp = config.kp;
+  ki = config.ki;
+  kd = config.kd;
+}
 
-  if (setpointRange != 0) {
-    setpoint = clamp(setpoint, measurement - setpointRange,
-                     measurement + setpointRange);
+bool PIDController::isSettled() const { return settled; }
+
+float PIDController::getLastError() const { return lastError; }
+
+float PIDController::getLastDerivative() const { return lastDerivative; }
+
+float PIDController::getOutput() const { return lastOutput; }
+
+float PIDController::compute(float setpoint, float measured) {
+  float error = setpoint - measured;
+  uint64_t now = esp_timer_get_time();
+
+  float dt = (now - lastTimeUs) / 1e6f;
+  if (lastTimeUs == 0 || dt < 1e-6f) {
+    lastTimeUs = now;
+    lastError = error;
+    prevMeasured = measured;
+    lastDerivative = 0.0f;
+    float output = config.kp * error;
+    lastOutput = output;
+    return output;
   }
 
-  error = setpoint - measurement;
-  Foutput = kf * setpoint;
-  Poutput = kp * error;
-
-  if (firstRun) {
-    prevMeasurement = measurement;
-    prevError = error;
-
-    firstRun = false;
-  }
-
-  Doutput = -kd * (measurement - prevMeasurement);
-  Ioutput = ki * errorSum;
-
-  if (maxIOutput != 0) {
-    Ioutput = clamp(Ioutput, -maxIOutput, maxIOutput);
-  }
-
-  out = Foutput + Poutput + Ioutput + Doutput;
-
-  if ((limMin != limMax) && !bounded(out, limMin, limMax)) {
-    errorSum = error;
-  } else if (maxIOutput != 0) {
-    errorSum = error;
+  if (fabsf(error) < config.errorEpsilon) {
+    error = 0.0f;
+    settled = true;
   } else {
-    errorSum += error;
+    settled = false;
   }
 
-  if (outputRampRate != 0) {
-    out = clamp(out, lastOutput - outputRampRate, lastOutput + outputRampRate);
+  float rawDerivative = -(measured - prevMeasured) / dt;
+  lastDerivative = config.derivativeAlpha * rawDerivative +
+                   (1.0f - config.derivativeAlpha) * lastDerivative;
+
+  float tentativeOutput =
+      config.kp * error + config.ki * integral + config.kd * lastDerivative;
+
+  bool belowMax = fabsf(tentativeOutput) < config.maxOutput;
+  bool correcting = (tentativeOutput * error < 0);
+
+  if (belowMax || correcting) {
+    integral += error * dt;
+    if (integral > config.maxIntegral)
+      integral = config.maxIntegral;
+    if (integral < -config.maxIntegral)
+      integral = -config.maxIntegral;
   }
 
-  if (limMin != limMax) {
-    out = clamp(out, limMin, limMax);
-  }
+  float output =
+      config.kp * error + config.ki * integral + config.kd * lastDerivative;
 
-  if (outputFilter != 0) {
-    out = lastOutput * outputFilter + out * (1 - outputFilter);
-  }
+  if (output > config.maxOutput)
+    output = config.maxOutput;
+  if (output < -config.maxOutput)
+    output = -config.maxOutput;
 
-  lastOutput = out;
+  lastOutput = output;
+  lastError = error;
+  lastTimeUs = now;
+  prevMeasured = measured;
 
-  return out;
+  return output;
 }
-
-float PID::getOutput(float actual) { return Update(setpoint, actual); }
-
-void PID::setParameters(float kp, float ki, float kd, float kf) {
-  if (this->ki != 0) {
-    errorSum = errorSum * this->ki / ki;
-  }
-
-  if (maxIOutput != 0) {
-    limMax = maxIOutput / ki;
-  }
-
-  this->kp = kp;
-  this->ki = ki;
-  this->kd = kd;
-  this->kf = kf;
-
-  checkSigns();
-}
-
-void PID::setOutputLimits(float limMin, float limMax) {
-  if (limMin > limMax) {
-    std::swap(limMin, limMax);
-  }
-
-  this->limMin = limMin;
-  this->limMax = limMax;
-
-  if (maxIOutput == 0 || (maxIOutput > (limMax - limMin))) {
-    setMaxIOutput(limMax - limMin);
-  }
-}
-
-void PID::setDirection(bool reversed) { this->reversed = reversed; }
-
-void PID::setSetpoint(float setpoint) { this->setpoint = setpoint; }
-
-void PID::setMaxIOutput(float maximum) {
-  maxIOutput = maximum;
-
-  if (ki != 0) {
-    limMax = maxIOutput / ki;
-  }
-}
-
-void PID::setOutputRampRate(float rate) { outputRampRate = rate; }
-
-void PID::setSetpointRange(float range) { setpointRange = range; }
-
-void PID::setOutputFilter(float strength) {
-  if (strength == 0 || bounded(strength, 0, 1)) {
-    outputFilter = strength;
-  }
-}
-
-void PID::reset() {
-  firstRun = true;
-  errorSum = 0;
-
-  integrator = 0;
-  prevError = 0;
-  prevMeasurement = 0;
-  lastOutput = 0;
-}
-
-void PID::checkSigns() {
-  if (reversed) {
-    if (kp > 0)
-      kp *= -1;
-    if (ki > 0)
-      ki *= -1;
-    if (kd > 0)
-      kd *= -1;
-  } else {
-    if (kp < 0)
-      kp *= -1;
-    if (ki < 0)
-      ki *= -1;
-    if (kd < 0)
-      kd *= -1;
-  }
-}
-
-float PID::clamp(float value, float min, float max) {
-  if (value > max) {
-    value = max;
-  }
-
-  if (value < min) {
-    value = min;
-  }
-
-  return value;
-}
-
-bool PID::bounded(float value, float min, float max) {
-  return (min < value) && (value < max);
-}
-} // namespace PID_Controller
-} // namespace DC_Motor_Controller_Firmware

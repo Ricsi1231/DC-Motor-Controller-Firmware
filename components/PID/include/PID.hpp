@@ -1,58 +1,52 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+
 namespace DC_Motor_Controller_Firmware {
-namespace PID_Controller {
-class PID {
-public:
-  PID();
-  float Update(float setpoint, float measurement);
-  float getOutput(float actual);
+namespace PID {
 
-  void setParameters(float kp, float ki, float kd, float kf);
-  void setOutputLimits(float limMin, float limMax);
-  void setMaxIOutput(float maximum);
-  void setDirection(bool reversed);
-  void setSetpoint(float setpoint);
-  void setOutputRampRate(float rate);
-  void setSetpointRange(float range);
-  void setOutputFilter(float strength);
-
-  void reset();
-
-private:
-  void checkSigns();
-  float clamp(float value, float min, float max);
-  bool bounded(float value, float min, float max);
-
-  bool reversed;
-  bool firstRun;
-
+struct PidConfig {
   float kp;
   float ki;
   float kd;
-  float kf;
-
-  float errorSum;
-
-  float limMin;
-  float limMax;
-
-  float maxIOutput;
-
-  float integrator;
-  float prevError;
-  float differentiator;
-
-  float setpoint;
-  float setpointRange;
-
-  float outputRampRate;
-  float outputFilter;
-
-  float prevMeasurement;
-  float lastOutput;
-  float out;
+  float maxOutput = 100.0f;
+  float maxIntegral = 1000.0f;
+  float errorEpsilon = 2.0f;
+  float speedEpsilon = 7.0f;
+  float errorTimeoutSec = 0.6f;
+  float stuckTimeoutSec = 0.5f;
+  float derivativeAlpha = 1.0f;
 };
-} // namespace PID_Controller
+
+class PIDController {
+public:
+  explicit PIDController(const PidConfig &cfg);
+  void reset();
+
+  float compute(float setpoint, float actual);
+  void setParameters(float kp, float ki, float kd);
+  void getParameters(float &kp, float &ki, float &kd);
+
+  bool isSettled() const;
+  float getLastError() const;
+  float getLastDerivative() const;
+  float getOutput() const;
+
+private:
+  PidConfig config;
+
+  float integral = 0.0f;
+  float lastError = 0.0f;
+  float lastOutput = 0.0f;
+  float lastDerivative = 0.0f;
+  float prevMeasured = 0.0f;
+
+  uint64_t lastTimeUs = 0;
+  bool settled = true;
+
+  int64_t stuckStartTime = 0;
+  int64_t smallErrorStartTime = 0;
+};
+
+} // namespace PID
 } // namespace DC_Motor_Controller_Firmware
