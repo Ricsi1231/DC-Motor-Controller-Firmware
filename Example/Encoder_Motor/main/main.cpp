@@ -8,12 +8,14 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "math.h"
+#include "motorControl.hpp"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::USB;
 using namespace DC_Motor_Controller_Firmware::Communication;
 using namespace DC_Motor_Controller_Firmware::PID;
+using namespace DC_Motor_Controller_Firmware::Control;
 
 const char *TAG = "MAIN";
 
@@ -43,16 +45,18 @@ MotorCommHandler motorComm(usb);
 
 PidConfig defaultConfig = {
     .kp = 1.2f,
-    .ki = 0.05f,         // ↑ stronger correction over time
-    .kd = 0.02f,         // ↓ reduce overshoot instability
+    .ki = 0.05f,     
+    .kd = 0.02f,       
     .maxOutput = 100.0f,
     .maxIntegral = 300.0f,
-    .errorEpsilon = 0.1f,  // ↓ better accuracy
-    .speedEpsilon = 0.2f,  // ↓ better precision
+    .errorEpsilon = 0.1f,  
+    .speedEpsilon = 0.2f,  
     .errorTimeoutSec = 0.5f,
     .stuckTimeoutSec = 0.5f,
 };
 PIDController pid(defaultConfig);
+
+MotorController motorControl(encoder, motor, pid);
 
 void motorTest(bool rotation);
 void encoderTest();
@@ -111,76 +115,28 @@ void encoderTest() {
   int32_t rpm = encoder.getPositionInRPM();
   ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees, rpm);
 }
+
 void testLabview() {
   motorComm.process();
 
-  static float lastPos = 0;
-  static int stuckCounter = 0;
-  static int pidWarmupCounter = 0;
-
   if (motorComm.isNewTargetReceived()) {
-    float currentPos = encoder.getPositionInDegrees();
+    float current = encoder.getPositionInDegrees();
     float offset = motorComm.getTargetDegrees();
-    setpointDegrees = currentPos + offset;
-
-    pid.reset();
-    motionDone = false;
-    lastPos = currentPos;
-    stuckCounter = 0;
-    pidWarmupCounter = 0;
-
+    motorControl.setTarget(current + offset);
     motorComm.clearTarget();
   }
 
   if (motorComm.isNewPIDReceived()) {
     float kp, ki, kd;
     motorComm.getPIDParams(kp, ki, kd);
-    pid.setParameters(kp, ki, kd);
+    motorControl.setPID(kp, ki, kd);
   }
 
   if (motorComm.wasPIDRequested()) {
     float kp, ki, kd;
-    pid.getParameters(kp, ki, kd);
+    motorControl.getPID(kp, ki, kd);
     motorComm.sendPIDParams(kp, ki, kd);
   }
 
-  if (motionDone) {
-    float drift = setpointDegrees - encoder.getPositionInDegrees();
-    if (fabs(drift) > 1.0f) {
-      ESP_LOGI("HOLD", "Drift correction: error=%.2f", drift);
-      pid.reset();
-      motionDone = false;
-      stuckCounter = 0;
-      pidWarmupCounter = 0;
-    }
-    return;
-  }
-
-  float currentPos = encoder.getPositionInDegrees();
-  float output = pid.compute(setpointDegrees, currentPos);
-
-  float speed = fabs(output);
-  if (speed < 2.0f && fabs(setpointDegrees - currentPos) > 0.2f)
-    speed = 2.0f;
-  if (speed > 100.0f) speed = 100.0f;
-
-  if (fabs(currentPos - lastPos) < 0.05f)
-    stuckCounter++;
-  else
-    stuckCounter = 0;
-  lastPos = currentPos;
-
-  if (stuckCounter > 50 || (pidWarmupCounter > 10 && pid.isSettled())) {
-    ESP_LOGW("LABVIEW", "Motion done or stuck → stopping");
-    motor.stop();
-    motionDone = true;
-    return;
-  }
-  pidWarmupCounter++;
-
-  motor.setDirection(output < 0 ? Direction::LEFT : Direction::RIGHT);
-  motor.setSpeed(speed);
+  motorControl.update();
 }
-
-
-
