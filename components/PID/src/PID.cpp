@@ -4,9 +4,7 @@
 
 using namespace DC_Motor_Controller_Firmware::PID;
 
-PIDController::PIDController(const PidConfig &cfg) : config(cfg) {
-  reset();
-}
+PIDController::PIDController(const PidConfig &cfg) : config(cfg) { reset(); }
 
 void PIDController::reset() {
   integral = 0.0f;
@@ -32,21 +30,13 @@ void PIDController::getParameters(float &kp, float &ki, float &kd) {
   kd = config.kd;
 }
 
-bool PIDController::isSettled() const {
-  return settled;
-}
+bool PIDController::isSettled() const { return settled; }
 
-float PIDController::getLastError() const {
-  return lastError;
-}
+float PIDController::getLastError() const { return lastError; }
 
-float PIDController::getLastDerivative() const {
-  return lastDerivative;
-}
+float PIDController::getLastDerivative() const { return lastDerivative; }
 
-float PIDController::getOutput() const {
-  return lastOutput;
-}
+float PIDController::getOutput() const { return lastOutput; }
 
 float PIDController::compute(float setpoint, float measured) {
   float error = setpoint - measured;
@@ -74,25 +64,27 @@ float PIDController::compute(float setpoint, float measured) {
   lastDerivative = config.derivativeAlpha * rawDerivative +
                    (1.0f - config.derivativeAlpha) * lastDerivative;
 
-  float tentativeOutput = config.kp * error +
-                          config.ki * integral +
-                          config.kd * lastDerivative;
+  float tentativeOutput =
+      config.kp * error + config.ki * integral + config.kd * lastDerivative;
 
   bool belowMax = fabsf(tentativeOutput) < config.maxOutput;
   bool correcting = (tentativeOutput * error < 0);
 
   if (belowMax || correcting) {
     integral += error * dt;
-    if (integral > config.maxIntegral) integral = config.maxIntegral;
-    if (integral < -config.maxIntegral) integral = -config.maxIntegral;
+    if (integral > config.maxIntegral)
+      integral = config.maxIntegral;
+    if (integral < -config.maxIntegral)
+      integral = -config.maxIntegral;
   }
 
-  float output = config.kp * error +
-                 config.ki * integral +
-                 config.kd * lastDerivative;
+  float output =
+      config.kp * error + config.ki * integral + config.kd * lastDerivative;
 
-  if (output > config.maxOutput) output = config.maxOutput;
-  if (output < -config.maxOutput) output = -config.maxOutput;
+  if (output > config.maxOutput)
+    output = config.maxOutput;
+  if (output < -config.maxOutput)
+    output = -config.maxOutput;
 
   lastOutput = output;
   lastError = error;

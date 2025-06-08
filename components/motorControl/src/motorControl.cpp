@@ -1,16 +1,15 @@
 #include "motorControl.hpp"
 #include "esp_log.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 
 using namespace DC_Motor_Controller_Firmware;
 using namespace Control;
 
-MotorController::MotorController(Encoder::Encoder& enc,
-                                 DRV8876::DRV8876& drv,
-                                 PID::PIDController& pid,
-                                 const MotorControllerConfig& cfg)
-  : encoder(enc), motor(drv), pid(pid), config(cfg) {}
+MotorController::MotorController(Encoder::Encoder &enc, DRV8876::DRV8876 &drv,
+                                 PID::PIDController &pid,
+                                 const MotorControllerConfig &cfg)
+    : encoder(enc), motor(drv), pid(pid), config(cfg) {}
 
 void MotorController::setTarget(float degrees) {
   target = degrees;
@@ -25,13 +24,11 @@ void MotorController::setPID(float kp, float ki, float kd) {
   pid.setParameters(kp, ki, kd);
 }
 
-void MotorController::getPID(float& kp, float& ki, float& kd) {
+void MotorController::getPID(float &kp, float &ki, float &kd) {
   pid.getParameters(kp, ki, kd);
 }
 
-bool MotorController::isMotionDone() const {
-  return motionDone;
-}
+bool MotorController::isMotionDone() const { return motionDone; }
 
 void MotorController::update() {
   if (motionDone) {
@@ -47,7 +44,8 @@ void MotorController::update() {
   float output = pid.compute(target, currentPos);
   float speed = fabsf(output);
 
-  if (speed < config.minSpeed && fabsf(target - currentPos) > config.minErrorToMove)
+  if (speed < config.minSpeed &&
+      fabsf(target - currentPos) > config.minErrorToMove)
     speed = config.minSpeed;
   speed = std::clamp(speed, config.minSpeed, config.maxSpeed);
 
@@ -66,6 +64,7 @@ void MotorController::update() {
   }
 
   pidWarmupCounter++;
-  motor.setDirection(output < 0 ? DRV8876::Direction::LEFT : DRV8876::Direction::RIGHT);
+  motor.setDirection(output < 0 ? DRV8876::Direction::LEFT
+                                : DRV8876::Direction::RIGHT);
   motor.setSpeed(speed);
 }

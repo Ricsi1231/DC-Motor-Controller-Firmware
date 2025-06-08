@@ -15,7 +15,7 @@ struct PidConfig {
   float speedEpsilon = 7.0f;
   float errorTimeoutSec = 0.6f;
   float stuckTimeoutSec = 0.5f;
-  float derivativeAlpha = 1.0f; 
+  float derivativeAlpha = 1.0f;
 };
 
 class PIDController {

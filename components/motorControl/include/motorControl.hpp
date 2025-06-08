@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Encoder.hpp"
 #include "DRV8876.hpp"
+#include "Encoder.hpp"
 #include "PID.hpp"
 
 namespace DC_Motor_Controller_Firmware::Control {
@@ -18,21 +18,20 @@ struct MotorControllerConfig {
 
 class MotorController {
 public:
-  MotorController(Encoder::Encoder& enc,
-                  DRV8876::DRV8876& drv,
-                  PID::PIDController& pid,
-                  const MotorControllerConfig& cfg = MotorControllerConfig());
+  MotorController(Encoder::Encoder &enc, DRV8876::DRV8876 &drv,
+                  PID::PIDController &pid,
+                  const MotorControllerConfig &cfg = MotorControllerConfig());
 
   void setTarget(float degrees);
   void setPID(float kp, float ki, float kd);
-  void getPID(float& kp, float& ki, float& kd);
+  void getPID(float &kp, float &ki, float &kd);
   void update();
   bool isMotionDone() const;
 
 private:
-  Encoder::Encoder& encoder;
-  DRV8876::DRV8876& motor;
-  PID::PIDController& pid;
+  Encoder::Encoder &encoder;
+  DRV8876::DRV8876 &motor;
+  PID::PIDController &pid;
   MotorControllerConfig config;
 
   float target = 0;
