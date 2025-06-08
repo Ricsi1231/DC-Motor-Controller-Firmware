@@ -1,88 +1,86 @@
 #include "PID.hpp"
-#include "esp_log.h"
 #include "esp_timer.h"
-#include <cmath>
+#include "math.h"
 
-namespace DC_Motor_Controller_Firmware {
-namespace PID {
+using namespace DC_Motor_Controller_Firmware::PID;
 
-PIDController::PIDController(const PIDConfig &config) : cfg(config) {}
-
-void PIDController::setTunings(float p, float i, float d) {
-  cfg.kp = p;
-  cfg.ki = i;
-  cfg.kd = d;
-}
-
-void PIDController::setOutputLimit(float limit) {
-  cfg.outputMax = limit;
-}
-
-void PIDController::setIntegralLimit(float limit) {
-  cfg.integralMax = limit;
+PIDController::PIDController(const PidConfig &cfg) : config(cfg) {
+  reset();
 }
 
 void PIDController::reset() {
-  eprev = 0;
-  eintegral = 0;
+  integral = 0.0f;
+  lastError = 0.0f;
+  lastDerivative = 0.0f;
+  lastOutput = 0.0f;
+  lastTimeUs = 0;
   stuckStartTime = 0;
   smallErrorStartTime = 0;
-  prevT = esp_timer_get_time();
+  settled = true;
 }
 
-float PIDController::compute(float setpoint, float actual, bool &shouldStop) {
-  int64_t currT = esp_timer_get_time();
-  float deltaT = (float)(currT - prevT) / 1e6f;
-  if (deltaT <= 0) deltaT = 0.001f;
-  prevT = currT;
-
-  float e = setpoint - actual;
-  float dedt = (e - eprev) / deltaT;
-  eintegral += e * deltaT;
-
-  if (eintegral > cfg.integralMax) eintegral = cfg.integralMax;
-  if (eintegral < -cfg.integralMax) eintegral = -cfg.integralMax;
-
-  float u = cfg.kp * e + cfg.ki * eintegral + cfg.kd * dedt;
-  float speed = fabs(u);
-  if (speed > cfg.outputMax) speed = cfg.outputMax;
-
-  if (fabs(e) < 5.0f && speed < cfg.lowErrorSpeedThreshold) {
-    if (smallErrorStartTime == 0) smallErrorStartTime = currT;
-    if ((currT - smallErrorStartTime) / 1e6f > cfg.lowErrorTimeout) {
-      shouldStop = true;
-      reset();
-      ESP_LOGW("PID", "Forced stop due to low error + speed timeout");
-      return 0;
-    }
-  } else {
-    smallErrorStartTime = 0;
-  }
-
-  if (fabs(actual - lastPos) < cfg.minMotionDelta && speed < cfg.minStopSpeed) {
-    if (stuckStartTime == 0) stuckStartTime = currT;
-    if ((currT - stuckStartTime) / 1e6f > cfg.stuckTimeout) {
-      shouldStop = true;
-      reset();
-      ESP_LOGW("PID", "Forced stop due to zero motion");
-      return 0;
-    }
-  } else {
-    stuckStartTime = 0;
-  }
-
-  lastPos = actual;
-
-  if (fabs(e) < cfg.stopErrorThreshold && speed < cfg.minStopSpeed) {
-    shouldStop = true;
-    reset();
-    return 0;
-  }
-
-  eprev = e;
-  ESP_LOGI("PID", "e=%.2f dedt=%.2f u=%.2f speed=%.2f pos=%.2f", e, dedt, u, speed, actual);
-  return u;
+void PIDController::setParameters(float kp, float ki, float kd) {
+  config.kp = kp;
+  config.ki = ki;
+  config.kd = kd;
 }
 
-} // namespace PID
-} // namespace DC_Motor_Controller_Firmware
+void PIDController::getParameters(float &kp, float &ki, float &kd) {
+  kp = config.kp;
+  ki = config.ki;
+  kd = config.kd;
+}
+
+bool PIDController::isSettled() const {
+  return settled;
+}
+
+float PIDController::getLastError() const {
+  return lastError;
+}
+
+float PIDController::getLastDerivative() const {
+  return lastDerivative;
+}
+
+float PIDController::compute(float setpoint, float measured) {
+  float error = setpoint - measured;
+  uint64_t now = esp_timer_get_time();
+
+  if (lastTimeUs == 0) {
+    lastTimeUs = now;
+    lastError = error;
+    lastDerivative = 0.0f;
+    return 0.0f;
+  }
+
+  float dt = (now - lastTimeUs) / 1e6f;
+  if (dt <= 0.000001f) dt = 0.001f;  
+
+  if (fabsf(error) < config.errorEpsilon) {
+    error = 0.0f;
+    settled = true;
+  } else {
+    settled = false;
+  }
+
+  lastDerivative = (error - lastError) / dt;
+
+  if (fabsf(error) < config.maxOutput) {
+    integral += error * dt;
+    if (integral > config.maxIntegral) integral = config.maxIntegral;
+    if (integral < -config.maxIntegral) integral = -config.maxIntegral;
+  }
+
+  float output = config.kp * error + config.ki * integral + config.kd * lastDerivative;
+
+  if (output > config.maxOutput) output = config.maxOutput;
+  if (output < -config.maxOutput) output = -config.maxOutput;
+
+  lastOutput = output;
+  lastError = error;
+  lastTimeUs = now;
+
+  return output;
+}
+
