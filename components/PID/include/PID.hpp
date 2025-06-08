@@ -15,6 +15,7 @@ struct PidConfig {
   float speedEpsilon = 7.0f;
   float errorTimeoutSec = 0.6f;
   float stuckTimeoutSec = 0.5f;
+  float derivativeAlpha = 1.0f; // 1.0 = no filter, 0.0 = frozen
 };
 
 class PIDController {
@@ -29,14 +30,16 @@ public:
   bool isSettled() const;
   float getLastError() const;
   float getLastDerivative() const;
+  float getOutput() const;
 
 private:
   PidConfig config;
 
   float integral = 0.0f;
   float lastError = 0.0f;
-  float lastDerivative = 0.0f;
   float lastOutput = 0.0f;
+  float lastDerivative = 0.0f;
+  float prevMeasured = 0.0f;
 
   uint64_t lastTimeUs = 0;
   bool settled = true;

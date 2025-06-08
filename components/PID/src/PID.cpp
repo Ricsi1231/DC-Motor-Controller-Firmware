@@ -11,8 +11,9 @@ PIDController::PIDController(const PidConfig &cfg) : config(cfg) {
 void PIDController::reset() {
   integral = 0.0f;
   lastError = 0.0f;
-  lastDerivative = 0.0f;
   lastOutput = 0.0f;
+  lastDerivative = 0.0f;
+  prevMeasured = 0.0f;
   lastTimeUs = 0;
   stuckStartTime = 0;
   smallErrorStartTime = 0;
@@ -43,19 +44,24 @@ float PIDController::getLastDerivative() const {
   return lastDerivative;
 }
 
+float PIDController::getOutput() const {
+  return lastOutput;
+}
+
 float PIDController::compute(float setpoint, float measured) {
   float error = setpoint - measured;
   uint64_t now = esp_timer_get_time();
 
-  if (lastTimeUs == 0) {
+  float dt = (now - lastTimeUs) / 1e6f;
+  if (lastTimeUs == 0 || dt < 1e-6f) {
     lastTimeUs = now;
     lastError = error;
+    prevMeasured = measured;
     lastDerivative = 0.0f;
-    return 0.0f;
+    float output = config.kp * error;
+    lastOutput = output;
+    return output;
   }
-
-  float dt = (now - lastTimeUs) / 1e6f;
-  if (dt <= 0.000001f) dt = 0.001f;  
 
   if (fabsf(error) < config.errorEpsilon) {
     error = 0.0f;
@@ -64,15 +70,26 @@ float PIDController::compute(float setpoint, float measured) {
     settled = false;
   }
 
-  lastDerivative = (error - lastError) / dt;
+  float rawDerivative = -(measured - prevMeasured) / dt;
+  lastDerivative = config.derivativeAlpha * rawDerivative +
+                   (1.0f - config.derivativeAlpha) * lastDerivative;
 
-  if (fabsf(error) < config.maxOutput) {
+  float tentativeOutput = config.kp * error +
+                          config.ki * integral +
+                          config.kd * lastDerivative;
+
+  bool belowMax = fabsf(tentativeOutput) < config.maxOutput;
+  bool correcting = (tentativeOutput * error < 0);
+
+  if (belowMax || correcting) {
     integral += error * dt;
     if (integral > config.maxIntegral) integral = config.maxIntegral;
     if (integral < -config.maxIntegral) integral = -config.maxIntegral;
   }
 
-  float output = config.kp * error + config.ki * integral + config.kd * lastDerivative;
+  float output = config.kp * error +
+                 config.ki * integral +
+                 config.kd * lastDerivative;
 
   if (output > config.maxOutput) output = config.maxOutput;
   if (output < -config.maxOutput) output = -config.maxOutput;
@@ -80,7 +97,7 @@ float PIDController::compute(float setpoint, float measured) {
   lastOutput = output;
   lastError = error;
   lastTimeUs = now;
+  prevMeasured = measured;
 
   return output;
 }
-
