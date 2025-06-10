@@ -40,8 +40,8 @@ USB usb;
 MotorCommHandler motorComm(usb);
 
 PidConfig defaultConfig = {
-    .kp = 1.2f,
-    .ki = 0.05f,
+    .kp = 1.0f,
+    .ki = 0.04f,
     .kd = 0.02f,
     .maxOutput = 100.0f,
     .maxIntegral = 300.0f,
@@ -67,6 +67,7 @@ esp_err_t errorStatus = ESP_OK;
 
 extern "C" void app_main() {
   float kp, ki, kd;
+  float targetDegree = 0, current, offset;
 
   errorStatus = motor.init();
   if (errorStatus != ESP_OK)
@@ -84,9 +85,11 @@ extern "C" void app_main() {
     motorComm.process();
 
     if (motorComm.isNewTargetReceived()) {
-      float current = encoder.getPositionInDegrees();
-      float offset = motorComm.getTargetDegrees();
-      motorControl.setTarget(current + offset);
+      current = encoder.getPositionInDegrees();
+      offset = motorComm.getTargetDegrees();
+      targetDegree = current + offset;
+
+      motorControl.setTarget(targetDegree);
       motorComm.clearTarget();
     }
 
@@ -98,6 +101,11 @@ extern "C" void app_main() {
     if (motorComm.wasPIDRequested()) {
       motorControl.getPID(kp, ki, kd);
       motorComm.sendPIDParams(kp, ki, kd);
+    }
+
+    if (encoder.getPositionInDegrees() == targetDegree) {
+      ESP_LOGI(TAG, "At target");
+      motorComm.notifyMotorPositionReached();
     }
 
     motorControl.update();
