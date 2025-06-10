@@ -49,7 +49,7 @@ private:
   static constexpr const char *MSG_GET_PID = "GET_PID";
   static constexpr const char *MSG_PID_REPLY = "PID:";
   static constexpr const char *MSG_MOTOR_POS = "MOTOR_POS:";
-  static constexpr const char *MSG_REACHED = "MOTOR_REACHED\n";
+  static constexpr const char *MSG_REACHED = "MOTOR_REACHED";
   static constexpr const char *MSG_STOP = "STOP";
   static constexpr const char *MSG_ENABLE = "ENABLE";
   static constexpr const char *MSG_DISABLE = "DISABLE";
