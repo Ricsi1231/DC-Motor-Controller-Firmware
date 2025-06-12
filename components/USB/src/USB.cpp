@@ -53,7 +53,6 @@ esp_err_t USB::init() {
     USB::USB_INTERFACE_PORT = TINYUSB_CDC_ACM_1;
 
     returnValue = tusb_cdc_acm_init(&amcCfg);
-    ;
 
     if (returnValue != ESP_OK) {
       ESP_LOGW(TAG,
