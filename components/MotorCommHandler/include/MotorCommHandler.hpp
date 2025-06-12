@@ -1,7 +1,6 @@
 #pragma once
 
 #include "USB.hpp"
-
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
 class MotorCommHandler {

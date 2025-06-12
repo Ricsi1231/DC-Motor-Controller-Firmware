@@ -35,7 +35,7 @@ void MotorController::update() {
     float drift = target - encoder.getPositionInDegrees();
     if (fabsf(drift) > config.driftThreshold) {
       ESP_LOGI("HOLD", "Drift correction: error=%.2f", drift);
-      setTarget(target); // Reapply same target
+      setTarget(target); 
     }
     return;
   }

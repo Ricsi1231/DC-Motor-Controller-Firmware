@@ -9,6 +9,8 @@
 #include "freertos/task.h"
 #include "math.h"
 #include "motorControl.hpp"
+#include "Pinout.hpp"
+#include "PeripheralSettings.hpp"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
@@ -19,56 +21,18 @@ using namespace DC_Motor_Controller_Firmware::Control;
 
 const char *TAG = "MAIN";
 
-gpio_num_t PH_PIN = GPIO_NUM_4;
-gpio_num_t EN_PIN = GPIO_NUM_5;
-gpio_num_t FAULT_PIN = GPIO_NUM_6;
-ledc_channel_t PWM_CHANNEL = LEDC_CHANNEL_0;
-
-gpio_num_t ENCODER_A = GPIO_NUM_1;
-gpio_num_t ENCODER_B = GPIO_NUM_2;
-uint16_t ppr = 1024;
-
-pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
-                               .high_limit = 1000,
-                               .flags = {
-                                   .accum_count = true,
-                               }};
-
-DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
-Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 USB usb;
 MotorCommHandler motorComm(usb);
-
-PidConfig defaultConfig = {
-    .kp = 1.0f,
-    .ki = 0.04f,
-    .kd = 0.02f,
-    .maxOutput = 100.0f,
-    .maxIntegral = 300.0f,
-    .errorEpsilon = 0.1f,
-    .speedEpsilon = 0.2f,
-    .errorTimeoutSec = 0.5f,
-    .stuckTimeoutSec = 0.5f,
-};
+DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
+Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 PIDController pid(defaultConfig);
-
-MotorControllerConfig motorCfg = {
-    .minSpeed = 2.0f,
-    .maxSpeed = 100.0f,
-    .minErrorToMove = 0.2f,
-    .driftThreshold = 1.0f,
-    .stuckPositionEpsilon = 0.05f,
-    .stuckCountLimit = 50,
-    .pidWarmupLimit = 10,
-};
 MotorController motorControl(encoder, motor, pid, motorCfg);
 
 esp_err_t errorStatus = ESP_OK;
+float kp = 1, ki = 0.04, kd = 0.025;
+float targetDegree = 0, current = 0, offset = 0;
 
 extern "C" void app_main() {
-  float kp, ki, kd;
-  float targetDegree = 0, current, offset;
-
   errorStatus = motor.init();
   if (errorStatus != ESP_OK)
     ESP_LOGD(TAG, "Error with motor init");
@@ -99,7 +63,6 @@ extern "C" void app_main() {
     }
 
     if (motorComm.wasPIDRequested()) {
-      motorControl.getPID(kp, ki, kd);
       motorComm.sendPIDParams(kp, ki, kd);
     }
 
