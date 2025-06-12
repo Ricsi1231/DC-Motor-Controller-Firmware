@@ -2,6 +2,8 @@
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
 #include "PID.hpp"
+#include "PeripheralSettings.hpp"
+#include "Pinout.hpp"
 #include "USB.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -9,8 +11,6 @@
 #include "freertos/task.h"
 #include "math.h"
 #include "motorControl.hpp"
-#include "Pinout.hpp"
-#include "PeripheralSettings.hpp"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
