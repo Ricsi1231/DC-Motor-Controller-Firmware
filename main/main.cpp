@@ -66,10 +66,13 @@ extern "C" void app_main() {
       motorComm.sendPIDParams(kp, ki, kd);
     }
 
-    if (encoder.getPositionInDegrees() == targetDegree) {
-      ESP_LOGI(TAG, "At target");
+    if (fabs(encoder.getPositionInDegrees() == targetDegree) <= 2.0f) {
+      // ESP_LOGI(TAG, "At target");
       motorComm.notifyMotorPositionReached();
+      // ESP_LOGI(TAG, " data was sent");
     }
+
+    // ESP_LOGI(TAG, " encoder: %f", encoder.getPositionInDegrees());
 
     motorControl.update();
     vTaskDelay(10);

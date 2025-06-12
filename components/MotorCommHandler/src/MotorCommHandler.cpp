@@ -19,7 +19,7 @@ void MotorCommHandler::process() {
 }
 
 void MotorCommHandler::parseMessage(const char *msg) {
-  ESP_LOGI("PARSE", "Received raw msg: '%s'", msg);
+  // ESP_LOGI("PARSE", "Received raw msg: '%s'", msg);
 
   if (strncmp(msg, MSG_SET_DEG, strlen(MSG_SET_DEG)) == 0) {
     targetDegrees = strtof(msg + strlen(MSG_SET_DEG), nullptr);
@@ -75,11 +75,16 @@ void MotorCommHandler::sendMotorState(float degrees) {
 
 void MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
   char msg[64];
+  esp_err_t usbState = ESP_OK;
 
   snprintf(msg, sizeof(msg), "%s%.2f,%.2f,%.2f\n", MSG_PID_REPLY, kp, ki, kd);
-  usb.sendString(msg);
+  usbState = usb.sendString(msg);
 
-  pidRequested = false;
+  if(usbState == ESP_OK) {
+    pidRequested = false;
+  }
+
+  // usb.flushRxBuffer();
 }
 
 void MotorCommHandler::clearTarget() {
@@ -93,6 +98,7 @@ void MotorCommHandler::notifyMotorPositionReached() {
 
 float MotorCommHandler::getTargetDegrees() {
   newTarget = false;
+  // usb.flushRxBuffer();
 
   return targetDegrees;
 }
@@ -101,6 +107,7 @@ void MotorCommHandler::getPIDParams(float &kp, float &ki, float &kd) {
   kp = pidKp;
   ki = pidKi;
   kd = pidKd;
+  // usb.flushRxBuffer();
 
   newPID = false;
 }
