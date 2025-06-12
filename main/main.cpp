@@ -19,7 +19,7 @@ using namespace DC_Motor_Controller_Firmware::Communication;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
 
-const char *TAG = "MAIN";
+const char *TAG = "MAIN APP";
 
 USB usb;
 MotorCommHandler motorComm(usb);
