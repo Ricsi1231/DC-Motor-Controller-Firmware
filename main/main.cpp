@@ -19,7 +19,7 @@ using namespace DC_Motor_Controller_Firmware::Communication;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
 
-const char *TAG = "MAIN";
+const char *TAG = "MAIN APP";
 
 USB usb;
 MotorCommHandler motorComm(usb);
@@ -66,8 +66,7 @@ extern "C" void app_main() {
       motorComm.sendPIDParams(kp, ki, kd);
     }
 
-    if (encoder.getPositionInDegrees() == targetDegree) {
-      ESP_LOGI(TAG, "At target");
+    if (fabs(encoder.getPositionInDegrees() == targetDegree) <= 2.0f) {
       motorComm.notifyMotorPositionReached();
     }
 

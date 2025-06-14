@@ -34,7 +34,7 @@ void MotorController::update() {
   if (motionDone) {
     float drift = target - encoder.getPositionInDegrees();
     if (fabsf(drift) > config.driftThreshold) {
-      ESP_LOGI("HOLD", "Drift correction: error=%.2f", drift);
+      // ESP_LOGI("HOLD", "Drift correction: error=%.2f", drift);
       setTarget(target);
     }
     return;
@@ -57,7 +57,7 @@ void MotorController::update() {
 
   if (stuckCounter > config.stuckCountLimit ||
       (pidWarmupCounter > config.pidWarmupLimit && pid.isSettled())) {
-    ESP_LOGW("LABVIEW", "Motion done or stuck → stopping");
+    // ESP_LOGW("LABVIEW", "Motion done or stuck → stopping");
     motor.stop();
     motionDone = true;
     return;
