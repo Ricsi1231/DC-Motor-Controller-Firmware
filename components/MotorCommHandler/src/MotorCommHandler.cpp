@@ -80,7 +80,7 @@ void MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
   snprintf(msg, sizeof(msg), "%s%.2f,%.2f,%.2f\n", MSG_PID_REPLY, kp, ki, kd);
   usbState = usb.sendString(msg);
 
-  if(usbState == ESP_OK) {
+  if (usbState == ESP_OK) {
     pidRequested = false;
   }
 
