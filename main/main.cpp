@@ -66,7 +66,7 @@ extern "C" void app_main() {
       motorComm.sendPIDParams(kp, ki, kd);
     }
 
-    if (fabs(encoder.getPositionInDegrees() == targetDegree) <= 2.0f) {
+    if (fabs(encoder.getPositionInDegrees() - targetDegree) <= 2.0f) {
       motorComm.notifyMotorPositionReached();
     }
 
