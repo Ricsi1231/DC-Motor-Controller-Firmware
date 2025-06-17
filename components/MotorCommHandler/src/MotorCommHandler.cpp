@@ -8,6 +8,8 @@ namespace DC_Motor_Controller_Firmware {
 namespace Communication {
 MotorCommHandler::MotorCommHandler(USB::USB &usbRef) : usb(usbRef) {}
 
+MotorCommHandler::~MotorCommHandler() {}
+
 void MotorCommHandler::process() {
   uint8_t buffer[128];
   size_t len = 0;

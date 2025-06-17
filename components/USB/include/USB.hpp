@@ -13,6 +13,7 @@ class USB {
 
 public:
   USB();
+  ~USB();
 
   esp_err_t init();
   esp_err_t sendData(uint8_t *data, size_t dataSize);

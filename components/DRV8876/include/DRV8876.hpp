@@ -12,6 +12,7 @@ class DRV8876 {
 public:
   DRV8876(gpio_num_t phPin, gpio_num_t enPin, gpio_num_t nFault,
           ledc_channel_t pwmChannel);
+  ~DRV8876();
 
   esp_err_t init();
 

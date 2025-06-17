@@ -11,6 +11,8 @@ MotorController::MotorController(Encoder::Encoder &enc, DRV8876::DRV8876 &drv,
                                  const MotorControllerConfig &cfg)
     : encoder(enc), motor(drv), pid(pid), config(cfg) {}
 
+MotorController::~MotorController() {}
+
 void MotorController::setTarget(float degrees) {
   target = degrees;
   pid.reset();
