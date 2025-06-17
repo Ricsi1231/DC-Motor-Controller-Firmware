@@ -6,6 +6,8 @@ using namespace DC_Motor_Controller_Firmware::PID;
 
 PIDController::PIDController(const PidConfig &cfg) : config(cfg) { reset(); }
 
+PIDController::~PIDController() {} 
+
 void PIDController::reset() {
   integral = 0.0f;
   lastError = 0.0f;

@@ -20,6 +20,10 @@ Encoder::Encoder(gpio_num_t pinA, gpio_num_t pinB,
   this->rpm = 0.0f;
 }
 
+Encoder::~Encoder() {
+  ESP_LOGI(TAG, "Encoder desctructor called");
+}
+
 esp_err_t Encoder::init() {
   esp_err_t returnValue = ESP_OK;
 

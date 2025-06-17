@@ -21,6 +21,7 @@ public:
   MotorController(Encoder::Encoder &enc, DRV8876::DRV8876 &drv,
                   PID::PIDController &pid,
                   const MotorControllerConfig &cfg = MotorControllerConfig());
+  ~MotorController();
 
   void setTarget(float degrees);
   void setPID(float kp, float ki, float kd);

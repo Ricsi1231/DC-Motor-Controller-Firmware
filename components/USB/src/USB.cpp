@@ -19,6 +19,8 @@ size_t USB::rxSize;
 
 USB::USB() { rxSize = 0; }
 
+USB::~USB() {}
+
 esp_err_t USB::init() {
   esp_err_t returnValue = ESP_OK;
 

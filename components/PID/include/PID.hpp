@@ -21,6 +21,8 @@ struct PidConfig {
 class PIDController {
 public:
   explicit PIDController(const PidConfig &cfg);
+   ~PIDController();
+
   void reset();
 
   float compute(float setpoint, float actual);

@@ -6,6 +6,7 @@ namespace Communication {
 class MotorCommHandler {
 public:
   explicit MotorCommHandler(USB::USB &usbRef);
+  ~MotorCommHandler();
 
   void process();
 

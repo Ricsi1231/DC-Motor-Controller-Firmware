@@ -9,6 +9,10 @@ DRV8876::DRV8876(gpio_num_t phPin, gpio_num_t enPin, gpio_num_t nFault,
     : phPin(phPin), enPin(enPin), nFault(nFault), pwmChannel(pwmChannel),
       resolution(LEDC_TIMER_8_BIT), frequency(20000) {}
 
+DRV8876::~DRV8876() {
+  ESP_LOGI(TAG, "DRV Destructor called");
+}
+
 esp_err_t DRV8876::init() {
   esp_err_t errorEsp = ESP_OK;
 
