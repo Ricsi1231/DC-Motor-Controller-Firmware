@@ -21,7 +21,7 @@ struct PidConfig {
 class PIDController {
 public:
   explicit PIDController(const PidConfig &cfg);
-   ~PIDController();
+  ~PIDController();
 
   void reset();
 

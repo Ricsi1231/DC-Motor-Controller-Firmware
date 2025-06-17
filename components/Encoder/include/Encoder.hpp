@@ -12,8 +12,8 @@ class Encoder {
 public:
   Encoder(gpio_num_t pinA, gpio_num_t pinB, pcnt_unit_config_t unitConfig,
           uint16_t ppr);
-    ~Encoder();
-      
+  ~Encoder();
+
   esp_err_t init();
 
   esp_err_t resetPositon();
