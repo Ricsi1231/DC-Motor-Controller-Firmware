@@ -2,8 +2,9 @@
  * @file MotorCommHandler.hpp
  * @brief Communication handler for motor control commands via USB.
  *
- * Handles incoming serial commands (target position, PID params, enable/disable, etc.)
- * and sends feedback (motor reached, current position, etc.) using the USB interface.
+ * Handles incoming serial commands (target position, PID params,
+ * enable/disable, etc.) and sends feedback (motor reached, current position,
+ * etc.) using the USB interface.
  */
 
 #pragma once
@@ -21,7 +22,7 @@ class MotorCommHandler {
 public:
   /**
    * @brief Constructor.
-   * 
+   *
    * @param usbRef Reference to initialized USB communication interface
    */
   explicit MotorCommHandler(USB::USB &usbRef);
@@ -38,14 +39,14 @@ public:
 
   /**
    * @brief Send motor's current position in degrees.
-   * 
+   *
    * @param degrees Position in degrees
    */
   void sendMotorState(float degrees);
 
   /**
    * @brief Send current PID parameters (for response to GET_PID).
-   * 
+   *
    * @param kp Proportional gain
    * @param ki Integral gain
    * @param kd Derivative gain
@@ -64,14 +65,14 @@ public:
 
   /**
    * @brief Get latest received target angle in degrees.
-   * 
+   *
    * @return float Target position
    */
   float getTargetDegrees();
 
   /**
    * @brief Get latest received PID parameters.
-   * 
+   *
    * @param kp Proportional gain (output)
    * @param ki Integral gain (output)
    * @param kd Derivative gain (output)
@@ -80,7 +81,7 @@ public:
 
   /**
    * @brief Check if a new target angle has been received.
-   * 
+   *
    * @return true if new target is available
    * @return false otherwise
    */
@@ -88,7 +89,7 @@ public:
 
   /**
    * @brief Check if new PID parameters have been received.
-   * 
+   *
    * @return true if updated PID available
    * @return false otherwise
    */
@@ -96,7 +97,7 @@ public:
 
   /**
    * @brief Check if a PID value read (GET_PID) was requested by host.
-   * 
+   *
    * @return true if host requested PID
    * @return false otherwise
    */
@@ -104,7 +105,7 @@ public:
 
   /**
    * @brief Check if stop was requested by host.
-   * 
+   *
    * @return true if STOP command received
    * @return false otherwise
    */
@@ -112,7 +113,7 @@ public:
 
   /**
    * @brief Check if motor is currently enabled.
-   * 
+   *
    * @return true if enabled
    * @return false if DISABLE was received
    */
@@ -120,29 +121,29 @@ public:
 
   /**
    * @brief Clear stop flag after processing STOP request.
-   * 
+   *
    * @param stopRequested Set to true to keep stop active
    */
   void clearStopFlag(bool stopRequested = false);
 
 private:
-  USB::USB &usb;               ///< USB interface reference
+  USB::USB &usb; ///< USB interface reference
 
-  float targetDegrees = 0.0f;  ///< Target position in degrees
-  bool newTarget = false;      ///< Flag: new target received
+  float targetDegrees = 0.0f; ///< Target position in degrees
+  bool newTarget = false;     ///< Flag: new target received
 
-  float pidKp = 0.0f;          ///< PID - proportional
-  float pidKi = 0.0f;          ///< PID - integral
-  float pidKd = 0.0f;          ///< PID - derivative
-  bool newPID = false;         ///< Flag: new PID received
+  float pidKp = 0.0f;  ///< PID - proportional
+  float pidKi = 0.0f;  ///< PID - integral
+  float pidKd = 0.0f;  ///< PID - derivative
+  bool newPID = false; ///< Flag: new PID received
 
-  bool pidRequested = false;   ///< Flag: GET_PID received
-  bool stopRequested = false;  ///< Flag: STOP received
-  bool motorEnabled = true;    ///< Flag: ENABLE/DISABLE state
+  bool pidRequested = false;  ///< Flag: GET_PID received
+  bool stopRequested = false; ///< Flag: STOP received
+  bool motorEnabled = true;   ///< Flag: ENABLE/DISABLE state
 
   /**
    * @brief Parse received command and update internal state accordingly.
-   * 
+   *
    * @param msg Null-terminated string message from USB
    */
   void parseMessage(const char *msg);
