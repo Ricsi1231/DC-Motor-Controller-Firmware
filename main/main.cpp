@@ -1,3 +1,21 @@
+/**
+ * @file main.cpp
+ * @brief Entry point for the DC Motor Controller firmware.
+ *
+ * Initializes all hardware components and starts the control tasks:
+ * - DRV8876 motor driver
+ * - Quadrature encoder via PCNT
+ * - PID controller
+ * - USB CDC communication interface
+ * - Motor command handler (MotorCommHandler)
+ * - High-level control logic (MotorController)
+ * - Application logic bridge (CommLogicHandler)
+ *
+ * This file configures the firmware's runtime behavior by starting
+ * FreeRTOS tasks for communication, control, and logic orchestration.
+ */
+
+#include "CommLogicHandler.hpp"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
@@ -18,6 +36,7 @@ using namespace DC_Motor_Controller_Firmware::USB;
 using namespace DC_Motor_Controller_Firmware::Communication;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
+using namespace DC_Motor_Controller_Firmware::Logic;
 
 const char *TAG = "MAIN APP";
 
@@ -27,10 +46,9 @@ DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
 Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
 PIDController pid(defaultConfig);
 MotorController motorControl(encoder, motor, pid, motorCfg);
+CommLogicHandler commLogic(motorComm, motorControl, encoder);
 
 esp_err_t errorStatus = ESP_OK;
-float kp = 1, ki = 0.04, kd = 0.025;
-float targetDegree = 0, current = 0, offset = 0;
 
 extern "C" void app_main() {
   errorStatus = motor.init();
@@ -45,32 +63,7 @@ extern "C" void app_main() {
   if (errorStatus != ESP_OK)
     ESP_LOGD(TAG, "Error with USB init");
 
-  while (1) {
-    motorComm.process();
-
-    if (motorComm.isNewTargetReceived()) {
-      current = encoder.getPositionInDegrees();
-      offset = motorComm.getTargetDegrees();
-      targetDegree = current + offset;
-
-      motorControl.setTarget(targetDegree);
-      motorComm.clearTarget();
-    }
-
-    if (motorComm.isNewPIDReceived()) {
-      motorComm.getPIDParams(kp, ki, kd);
-      motorControl.setPID(kp, ki, kd);
-    }
-
-    if (motorComm.wasPIDRequested()) {
-      motorComm.sendPIDParams(kp, ki, kd);
-    }
-
-    if (fabs(encoder.getPositionInDegrees() - targetDegree) <= 2.0f) {
-      motorComm.notifyMotorPositionReached();
-    }
-
-    motorControl.update();
-    vTaskDelay(10);
-  }
+  motorComm.startTask();
+  motorControl.startTask();
+  commLogic.startTask();
 }

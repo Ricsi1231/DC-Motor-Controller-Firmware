@@ -128,6 +128,7 @@ private:
   static size_t rxSize; ///< Size of data in RX buffer
 
   static const char *TAG; ///< Log tag
+  bool messeageArived = false;
 
   static tinyusb_cdcacm_itf_t USB_INTERFACE_PORT; ///< USB CDC interface used
 };
