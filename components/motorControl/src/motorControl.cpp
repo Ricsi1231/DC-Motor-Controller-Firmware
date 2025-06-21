@@ -33,7 +33,7 @@ void MotorController::taskFunc(void *param) {
 
   while (true) {
     self->update();
-    vTaskDelay(pdMS_TO_TICKS(10)); 
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 

@@ -15,6 +15,7 @@
  * FreeRTOS tasks for communication, control, and logic orchestration.
  */
 
+#include "CommLogicHandler.hpp"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
@@ -28,7 +29,6 @@
 #include "freertos/task.h"
 #include "math.h"
 #include "motorControl.hpp"
-#include "CommLogicHandler.hpp"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;

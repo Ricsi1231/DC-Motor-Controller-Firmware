@@ -106,11 +106,11 @@ void USB::usbCallback(int itf, cdcacm_event_t *event) {
 }
 
 esp_err_t USB::receiveData(uint8_t *data, size_t *rxBufferSize) {
-  if (!serialIsOpen || !isInitialized || !messageArrived) 
+  if (!serialIsOpen || !isInitialized || !messageArrived)
     return ESP_FAIL;
 
   taskENTER_CRITICAL(&usbSpinLock);
-  size_t len = strlen(reinterpret_cast<const char*>(rxBuffer));
+  size_t len = strlen(reinterpret_cast<const char *>(rxBuffer));
   memcpy(data, rxBuffer, len + 1);
   *rxBufferSize = len;
   messageArrived = false;
@@ -161,7 +161,8 @@ esp_err_t USB::sendString(const char *str) {
       USB_INTERFACE_PORT, reinterpret_cast<const uint8_t *>(str), dataSize);
 
   if (queued != dataSize) {
-    ESP_LOGW(TAG, "USB sendString - Not all bytes queued (%d/%d).", queued, dataSize);
+    ESP_LOGW(TAG, "USB sendString - Not all bytes queued (%d/%d).", queued,
+             dataSize);
     return ESP_FAIL;
   }
 

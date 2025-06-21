@@ -29,11 +29,10 @@ void MotorCommHandler::startTask() {
 void MotorCommHandler::commTaskWrapper(void *param) {
   auto *self = static_cast<MotorCommHandler *>(param);
   while (true) {
-    self->process();  
-    vTaskDelay(pdMS_TO_TICKS(10));  
+    self->process();
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
-
 
 void MotorCommHandler::parseMessage(const char *msg) {
   portENTER_CRITICAL(&spinlock);
@@ -41,7 +40,8 @@ void MotorCommHandler::parseMessage(const char *msg) {
     targetDegrees = strtof(msg + strlen(MSG_SET_DEG), nullptr);
     newTarget = true;
   } else if (strncmp(msg, MSG_SET_PID, strlen(MSG_SET_PID)) == 0) {
-    int ret = sscanf(msg + strlen(MSG_SET_PID), "%f,%f,%f", &pidKp, &pidKi, &pidKd);
+    int ret =
+        sscanf(msg + strlen(MSG_SET_PID), "%f,%f,%f", &pidKp, &pidKi, &pidKd);
     if (ret == 3) {
       newPID = true;
       portEXIT_CRITICAL(&spinlock);
@@ -67,7 +67,6 @@ void MotorCommHandler::parseMessage(const char *msg) {
   }
   portEXIT_CRITICAL(&spinlock);
 }
-
 
 void MotorCommHandler::sendMotorState(float degrees) {
   char msg[64];
@@ -129,7 +128,7 @@ void MotorCommHandler::clearStopFlag(bool stop) {
 
 bool MotorCommHandler::isNewPIDReceived() const {
   bool value;
-  taskENTER_CRITICAL(&spinlock);  
+  taskENTER_CRITICAL(&spinlock);
   value = newPID;
   taskEXIT_CRITICAL(&spinlock);
   return value;

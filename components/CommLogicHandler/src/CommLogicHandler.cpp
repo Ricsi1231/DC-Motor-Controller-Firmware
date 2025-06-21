@@ -1,6 +1,6 @@
 #include "CommLogicHandler.hpp"
-#include <cmath>
 #include "esp_task_wdt.h"
+#include <cmath>
 
 using namespace DC_Motor_Controller_Firmware::Logic;
 
@@ -41,18 +41,20 @@ void CommLogicHandler::taskFunc(void *param) {
     }
 
     if (self->motorComm.wasPIDRequested()) {
-    if (self->motorComm.isUSBOpen()) {
-      self->motorControl.getPID(self->kp, self->ki, self->kd);
-      esp_err_t res = self->motorComm.sendPIDParams(self->kp, self->ki, self->kd);
-      if (res != ESP_OK) {
+      if (self->motorComm.isUSBOpen()) {
+        self->motorControl.getPID(self->kp, self->ki, self->kd);
+        esp_err_t res =
+            self->motorComm.sendPIDParams(self->kp, self->ki, self->kd);
+        if (res != ESP_OK) {
+          self->motorComm.clearPIDRequest();
+        }
+      } else {
         self->motorComm.clearPIDRequest();
       }
-    } else {
-      self->motorComm.clearPIDRequest(); 
     }
-  }
 
-    if ((fabsf(self->encoder.getPositionInDegrees() - self->targetDegree)) && !self->settled) {
+    if ((fabsf(self->encoder.getPositionInDegrees() - self->targetDegree)) &&
+        !self->settled) {
       if (self->motorComm.isUSBOpen()) {
         self->motorComm.notifyMotorPositionReached();
       }

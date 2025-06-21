@@ -3,18 +3,18 @@
  * @brief Communication handler for motor control commands via USB.
  *
  * Handles incoming serial commands (target position, PID params,
- * enable/disable, etc.) and sends feedback (motor reached, current position, etc.)
- * using the USB interface.
+ * enable/disable, etc.) and sends feedback (motor reached, current position,
+ * etc.) using the USB interface.
  */
 
 #pragma once
 
 #include "USB.hpp"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
-#include "esp_system.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
@@ -41,8 +41,8 @@ public:
   /**
    * @brief Starts the FreeRTOS task that continuously processes USB commands.
    *
-   * Creates a background task (`MotorCommTask`) using `xTaskCreate()` which calls `process()`.
-   * Does nothing if the task is already running.
+   * Creates a background task (`MotorCommTask`) using `xTaskCreate()` which
+   * calls `process()`. Does nothing if the task is already running.
    */
   void startTask();
 
@@ -139,20 +139,20 @@ public:
 
 private:
   USB::USB &usb;                     ///< USB interface reference
-  TaskHandle_t taskHandle = nullptr;///< Handle for the FreeRTOS task
+  TaskHandle_t taskHandle = nullptr; ///< Handle for the FreeRTOS task
   mutable portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-  float targetDegrees = 0.0f;       ///< Last received target angle
-  bool newTarget = false;           ///< Flag: new target was received
+  float targetDegrees = 0.0f; ///< Last received target angle
+  bool newTarget = false;     ///< Flag: new target was received
 
-  float pidKp = 0.0f;               ///< Last received PID: kp
-  float pidKi = 0.0f;               ///< Last received PID: ki
-  float pidKd = 0.0f;               ///< Last received PID: kd
-  bool newPID = false;              ///< Flag: new PID values received
+  float pidKp = 0.0f;  ///< Last received PID: kp
+  float pidKi = 0.0f;  ///< Last received PID: ki
+  float pidKd = 0.0f;  ///< Last received PID: kd
+  bool newPID = false; ///< Flag: new PID values received
 
-  bool pidRequested = false;        ///< Flag: GET_PID command received
-  bool stopRequested = false;       ///< Flag: STOP command received
-  bool motorEnabled = true;         ///< Flag: motor is enabled or disabled
+  bool pidRequested = false;  ///< Flag: GET_PID command received
+  bool stopRequested = false; ///< Flag: STOP command received
+  bool motorEnabled = true;   ///< Flag: motor is enabled or disabled
 
   /**
    * @brief Parses incoming USB message strings and updates internal state.
@@ -167,17 +167,17 @@ private:
   static void commTaskWrapper(void *param);
 
   // Command Identifiers
-  static constexpr const char *MSG_SET_DEG     = "SET_DEG:";
-  static constexpr const char *MSG_SET_PID     = "SET_PID:";
-  static constexpr const char *MSG_GET_PID     = "GET_PID";
-  static constexpr const char *MSG_PID_REPLY   = "PID:";
-  static constexpr const char *MSG_MOTOR_POS   = "MOTOR_POS:";
-  static constexpr const char *MSG_REACHED     = "MOTOR_REACHED";
-  static constexpr const char *MSG_STOP        = "STOP";
-  static constexpr const char *MSG_ENABLE      = "ENABLE";
-  static constexpr const char *MSG_DISABLE     = "DISABLE";
-  static constexpr const char *MSG_RESET       = "RESET_ALL";
-  static constexpr const char *MSG_GET_STATE   = "GET_STATE";
+  static constexpr const char *MSG_SET_DEG = "SET_DEG:";
+  static constexpr const char *MSG_SET_PID = "SET_PID:";
+  static constexpr const char *MSG_GET_PID = "GET_PID";
+  static constexpr const char *MSG_PID_REPLY = "PID:";
+  static constexpr const char *MSG_MOTOR_POS = "MOTOR_POS:";
+  static constexpr const char *MSG_REACHED = "MOTOR_REACHED";
+  static constexpr const char *MSG_STOP = "STOP";
+  static constexpr const char *MSG_ENABLE = "ENABLE";
+  static constexpr const char *MSG_DISABLE = "DISABLE";
+  static constexpr const char *MSG_RESET = "RESET_ALL";
+  static constexpr const char *MSG_GET_STATE = "GET_STATE";
 };
 
 } // namespace Communication

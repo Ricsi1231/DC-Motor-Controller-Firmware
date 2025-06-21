@@ -9,17 +9,18 @@
 
 #pragma once
 
-#include "MotorCommHandler.hpp"
-#include "motorControl.hpp"
 #include "Encoder.hpp"
+#include "MotorCommHandler.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "motorControl.hpp"
 
 namespace DC_Motor_Controller_Firmware::Logic {
 
 /**
  * @class CommLogicHandler
- * @brief High-level control task that connects USB commands with motor behavior.
+ * @brief High-level control task that connects USB commands with motor
+ * behavior.
  *
  * This class launches a background FreeRTOS task to:
  * - Receive and apply new position targets
@@ -36,8 +37,7 @@ public:
    * @param enc Reference to Encoder for feedback
    */
   CommLogicHandler(Communication::MotorCommHandler &comm,
-                   Control::MotorController &motor,
-                   Encoder::Encoder &enc);
+                   Control::MotorController &motor, Encoder::Encoder &enc);
 
   /**
    * @brief Starts the FreeRTOS control logic task.
@@ -52,15 +52,15 @@ private:
   Control::MotorController &motorControl;     ///< Motor control interface
   Encoder::Encoder &encoder;                  ///< Encoder feedback provider
 
-  TaskHandle_t taskHandle = nullptr;          ///< Logic task handle
+  TaskHandle_t taskHandle = nullptr; ///< Logic task handle
 
-  float kp = 0.0f, ki = 0.0f, kd = 0.0f;       ///< Current PID values
-  float current = 0.0f;                       ///< Current motor position
-  float offset = 0.0f;                        ///< Requested offset from current position
-  float targetDegree = 0.0f;                  ///< Final target position
-  bool settled = false;                       ///< Whether target has been reached
+  float kp = 0.0f, ki = 0.0f, kd = 0.0f; ///< Current PID values
+  float current = 0.0f;                  ///< Current motor position
+  float offset = 0.0f;       ///< Requested offset from current position
+  float targetDegree = 0.0f; ///< Final target position
+  bool settled = false;      ///< Whether target has been reached
 
-  bool getPIDValuesFirsTime = true;           ///< Initialization flag for PID sync
+  bool getPIDValuesFirsTime = true; ///< Initialization flag for PID sync
 
   /**
    * @brief Static task function executed in FreeRTOS context.
