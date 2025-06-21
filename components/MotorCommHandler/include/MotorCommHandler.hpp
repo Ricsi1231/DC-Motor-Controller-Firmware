@@ -10,145 +10,163 @@
 #pragma once
 
 #include "USB.hpp"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
 
 /**
  * @class MotorCommHandler
- * @brief Parses motor-related commands and responses over USB.
+ * @brief Parses and manages motor-related USB communication commands.
  */
 class MotorCommHandler {
 public:
   /**
    * @brief Constructor.
-   *
-   * @param usbRef Reference to initialized USB communication interface
+   * @param usbRef Reference to the initialized USB communication interface.
    */
   explicit MotorCommHandler(USB::USB &usbRef);
 
   /**
    * @brief Destructor.
+   *
+   * Deletes the FreeRTOS task created by startTask(), if running.
    */
   ~MotorCommHandler();
 
   /**
-   * @brief Main polling method to read and process USB messages.
+   * @brief Starts the FreeRTOS task that continuously processes USB commands.
+   *
+   * Creates a background task (`MotorCommTask`) using `xTaskCreate()` which
+   * calls `process()`. Does nothing if the task is already running.
+   */
+  void startTask();
+
+  /**
+   * @brief Poll for and process incoming USB messages.
    */
   void process();
 
   /**
-   * @brief Send motor's current position in degrees.
-   *
-   * @param degrees Position in degrees
+   * @brief Sends the current motor position in degrees over USB.
+   * @param degrees Position in degrees.
    */
   void sendMotorState(float degrees);
 
   /**
-   * @brief Send current PID parameters (for response to GET_PID).
-   *
-   * @param kp Proportional gain
-   * @param ki Integral gain
-   * @param kd Derivative gain
+   * @brief Sends current PID parameters in response to GET_PID.
+   * @param kp Proportional gain.
+   * @param ki Integral gain.
+   * @param kd Derivative gain.
+   * @return esp_err_t ESP_OK if successful.
    */
-  void sendPIDParams(float kp, float ki, float kd);
+  esp_err_t sendPIDParams(float kp, float ki, float kd);
 
   /**
-   * @brief Notify the host that the motor has reached its target.
+   * @brief Sends a notification that the motor has reached its target.
    */
   void notifyMotorPositionReached();
 
   /**
-   * @brief Clear current target angle and flags.
+   * @brief Clears the current position target and its flag.
    */
   void clearTarget();
 
   /**
-   * @brief Get latest received target angle in degrees.
-   *
-   * @return float Target position
+   * @brief Clears the PID request flag.
+   */
+  void clearPIDRequest();
+
+  /**
+   * @brief Returns the most recently received target angle.
+   * @return float Target angle in degrees.
    */
   float getTargetDegrees();
 
   /**
-   * @brief Get latest received PID parameters.
-   *
-   * @param kp Proportional gain (output)
-   * @param ki Integral gain (output)
-   * @param kd Derivative gain (output)
+   * @brief Retrieves the most recently received PID parameters.
+   * @param kp Output: proportional gain.
+   * @param ki Output: integral gain.
+   * @param kd Output: derivative gain.
    */
   void getPIDParams(float &kp, float &ki, float &kd);
 
   /**
-   * @brief Check if a new target angle has been received.
-   *
-   * @return true if new target is available
-   * @return false otherwise
+   * @brief Indicates if a new target angle was received.
+   * @return true if new target is available, false otherwise.
    */
   bool isNewTargetReceived() const;
 
   /**
-   * @brief Check if new PID parameters have been received.
-   *
-   * @return true if updated PID available
-   * @return false otherwise
+   * @brief Indicates if new PID parameters were received.
+   * @return true if updated PID is available, false otherwise.
    */
   bool isNewPIDReceived() const;
 
   /**
-   * @brief Check if a PID value read (GET_PID) was requested by host.
-   *
-   * @return true if host requested PID
-   * @return false otherwise
+   * @brief Indicates if the host requested current PID parameters.
+   * @return true if GET_PID was received, false otherwise.
    */
   bool wasPIDRequested() const;
 
   /**
-   * @brief Check if stop was requested by host.
-   *
-   * @return true if STOP command received
-   * @return false otherwise
+   * @brief Indicates if the STOP command was received.
+   * @return true if STOP requested, false otherwise.
    */
   bool isStopRequested() const;
 
   /**
-   * @brief Check if motor is currently enabled.
-   *
-   * @return true if enabled
-   * @return false if DISABLE was received
+   * @brief Indicates if the motor is currently enabled.
+   * @return true if enabled, false if disabled.
    */
   bool isMotorEnabled() const;
 
   /**
-   * @brief Clear stop flag after processing STOP request.
-   *
-   * @param stopRequested Set to true to keep stop active
+   * @brief Indicates if the USB serial interface is open.
+   * @return true if open, false otherwise.
+   */
+  bool isUSBOpen() const;
+
+  /**
+   * @brief Clears the stop flag.
+   * @param stopRequested Optionally set to true to reassert stop state.
    */
   void clearStopFlag(bool stopRequested = false);
 
 private:
-  USB::USB &usb; ///< USB interface reference
+  USB::USB &usb;                     ///< USB interface reference
+  TaskHandle_t taskHandle = nullptr; ///< Handle for the FreeRTOS task
+  mutable portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
-  float targetDegrees = 0.0f; ///< Target position in degrees
-  bool newTarget = false;     ///< Flag: new target received
+  float targetDegrees = 0.0f; ///< Last received target angle
+  bool newTarget = false;     ///< Flag: new target was received
 
-  float pidKp = 0.0f;  ///< PID - proportional
-  float pidKi = 0.0f;  ///< PID - integral
-  float pidKd = 0.0f;  ///< PID - derivative
-  bool newPID = false; ///< Flag: new PID received
+  float pidKp = 0.0f;  ///< Last received PID: kp
+  float pidKi = 0.0f;  ///< Last received PID: ki
+  float pidKd = 0.0f;  ///< Last received PID: kd
+  bool newPID = false; ///< Flag: new PID values received
 
-  bool pidRequested = false;  ///< Flag: GET_PID received
-  bool stopRequested = false; ///< Flag: STOP received
-  bool motorEnabled = true;   ///< Flag: ENABLE/DISABLE state
+  bool pidRequested = false;  ///< Flag: GET_PID command received
+  bool stopRequested = false; ///< Flag: STOP command received
+  bool motorEnabled = true;   ///< Flag: motor is enabled or disabled
 
   /**
-   * @brief Parse received command and update internal state accordingly.
-   *
-   * @param msg Null-terminated string message from USB
+   * @brief Parses incoming USB message strings and updates internal state.
+   * @param msg Null-terminated message string.
    */
   void parseMessage(const char *msg);
 
-  // Recognized message headers
+  /**
+   * @brief Static FreeRTOS task wrapper for the communication loop.
+   * @param param Pointer to MotorCommHandler instance.
+   */
+  static void commTaskWrapper(void *param);
+
+  // Command Identifiers
   static constexpr const char *MSG_SET_DEG = "SET_DEG:";
   static constexpr const char *MSG_SET_PID = "SET_PID:";
   static constexpr const char *MSG_GET_PID = "GET_PID";
