@@ -10,6 +10,11 @@
 #pragma once
 
 #include "USB.hpp"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "esp_system.h"
+#include "esp_log.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
@@ -31,6 +36,8 @@ public:
    * @brief Destructor.
    */
   ~MotorCommHandler();
+
+  void startTask();
 
   /**
    * @brief Main polling method to read and process USB messages.
@@ -128,6 +135,8 @@ public:
 
 private:
   USB::USB &usb; ///< USB interface reference
+  static void commTaskWrapper(void *param);
+
 
   float targetDegrees = 0.0f; ///< Target position in degrees
   bool newTarget = false;     ///< Flag: new target received
@@ -140,6 +149,9 @@ private:
   bool pidRequested = false;  ///< Flag: GET_PID received
   bool stopRequested = false; ///< Flag: STOP received
   bool motorEnabled = true;   ///< Flag: ENABLE/DISABLE state
+
+  TaskHandle_t taskHandle = nullptr;
+  mutable portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
   /**
    * @brief Parse received command and update internal state accordingly.

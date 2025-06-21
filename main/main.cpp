@@ -31,6 +31,7 @@ MotorController motorControl(encoder, motor, pid, motorCfg);
 esp_err_t errorStatus = ESP_OK;
 float kp = 1, ki = 0.04, kd = 0.025;
 float targetDegree = 0, current = 0, offset = 0;
+bool setteld = false;
 
 extern "C" void app_main() {
   errorStatus = motor.init();
@@ -45,9 +46,9 @@ extern "C" void app_main() {
   if (errorStatus != ESP_OK)
     ESP_LOGD(TAG, "Error with USB init");
 
-  while (1) {
-    motorComm.process();
+  motorComm.startTask();
 
+  while (1) {
     if (motorComm.isNewTargetReceived()) {
       current = encoder.getPositionInDegrees();
       offset = motorComm.getTargetDegrees();
@@ -55,6 +56,7 @@ extern "C" void app_main() {
 
       motorControl.setTarget(targetDegree);
       motorComm.clearTarget();
+      setteld = false;
     }
 
     if (motorComm.isNewPIDReceived()) {
@@ -66,8 +68,9 @@ extern "C" void app_main() {
       motorComm.sendPIDParams(kp, ki, kd);
     }
 
-    if (fabs(encoder.getPositionInDegrees() - targetDegree) <= 2.0f) {
+    if ((fabs(encoder.getPositionInDegrees() - targetDegree) <= 2.0f) && (setteld == false)) {
       motorComm.notifyMotorPositionReached();
+      setteld = true;
     }
 
     motorControl.update();
