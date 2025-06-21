@@ -1,3 +1,20 @@
+/**
+ * @file main.cpp
+ * @brief Entry point for the DC Motor Controller firmware.
+ *
+ * Initializes all hardware components and starts the control tasks:
+ * - DRV8876 motor driver
+ * - Quadrature encoder via PCNT
+ * - PID controller
+ * - USB CDC communication interface
+ * - Motor command handler (MotorCommHandler)
+ * - High-level control logic (MotorController)
+ * - Application logic bridge (CommLogicHandler)
+ *
+ * This file configures the firmware's runtime behavior by starting
+ * FreeRTOS tasks for communication, control, and logic orchestration.
+ */
+
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
