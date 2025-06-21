@@ -22,6 +22,21 @@ void MotorController::setTarget(float degrees) {
   pidWarmupCounter = 0;
 }
 
+void MotorController::startTask() {
+  if (taskHandle == nullptr) {
+    xTaskCreate(taskFunc, "MotorControlTask", 4096, this, 10, &taskHandle);
+  }
+}
+
+void MotorController::taskFunc(void *param) {
+  auto *self = static_cast<MotorController *>(param);
+
+  while (true) {
+    self->update();
+    vTaskDelay(pdMS_TO_TICKS(10)); 
+  }
+}
+
 void MotorController::setPID(float kp, float ki, float kd) {
   pid.setParameters(kp, ki, kd);
 }

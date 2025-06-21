@@ -11,6 +11,11 @@
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "PID.hpp"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "esp_system.h"
+#include "esp_log.h"
 
 namespace DC_Motor_Controller_Firmware::Control {
 
@@ -52,6 +57,8 @@ public:
    * @brief Destructor.
    */
   ~MotorController();
+
+  void startTask();
 
   /**
    * @brief Set target position in degrees.
@@ -96,6 +103,9 @@ private:
   DRV8876::DRV8876 &motor;      ///< Motor driver for control
   PID::PIDController &pid;      ///< PID controller for motion logic
   MotorControllerConfig config; ///< Motion configuration
+
+  TaskHandle_t taskHandle = nullptr;
+  static void taskFunc(void *param);
 
   float target = 0;         ///< Current target position (deg)
   bool motionDone = true;   ///< Motion completion status

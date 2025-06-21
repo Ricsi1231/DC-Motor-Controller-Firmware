@@ -58,7 +58,7 @@ public:
    * @param ki Integral gain
    * @param kd Derivative gain
    */
-  void sendPIDParams(float kp, float ki, float kd);
+  esp_err_t sendPIDParams(float kp, float ki, float kd);
 
   /**
    * @brief Notify the host that the motor has reached its target.
@@ -69,6 +69,8 @@ public:
    * @brief Clear current target angle and flags.
    */
   void clearTarget();
+
+  void clearPIDRequest();
 
   /**
    * @brief Get latest received target angle in degrees.
@@ -125,6 +127,8 @@ public:
    * @return false if DISABLE was received
    */
   bool isMotorEnabled() const;
+
+  bool isUSBOpen() const;
 
   /**
    * @brief Clear stop flag after processing STOP request.

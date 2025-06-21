@@ -17,6 +17,8 @@ const char *USB::TAG = "USB";
 
 size_t USB::rxSize;
 
+static inline bool messageArrived = false;
+
 USB::USB() { rxSize = 0; }
 
 USB::~USB() {}
@@ -97,31 +99,22 @@ void USB::usbCallback(int itf, cdcacm_event_t *event) {
   rxBuffer[length] = '\0';
 
   taskENTER_CRITICAL_ISR(&usbSpinLock);
-  memcpy(message.buffer, rxBuffer, length + 1);
-  message.bufferSize = length;
-  message.itf = itf;
+  messageArrived = true;
   taskEXIT_CRITICAL_ISR(&usbSpinLock);
 
   ESP_LOGW(TAG, "Raw message: '%s'", reinterpret_cast<char *>(rxBuffer));
 }
 
 esp_err_t USB::receiveData(uint8_t *data, size_t *rxBufferSize) {
-  if (serialIsOpen == false) {
-    ESP_LOGW(TAG, "USB receive data - Serial port is not opened.");
+  if (!serialIsOpen || !isInitialized || !messageArrived) 
     return ESP_FAIL;
-  }
-
-  if (isInitialized == false) {
-    ESP_LOGW(TAG, "USB receive data - Serial port is not initalized.");
-    return ESP_FAIL;
-  }
 
   taskENTER_CRITICAL(&usbSpinLock);
-  memcpy(data, message.buffer, message.bufferSize);
-  *rxBufferSize = message.bufferSize;
+  size_t len = strlen(reinterpret_cast<const char*>(rxBuffer));
+  memcpy(data, rxBuffer, len + 1);
+  *rxBufferSize = len;
+  messageArrived = false;
   taskEXIT_CRITICAL(&usbSpinLock);
-
-  message.bufferSize = 0;
 
   return ESP_OK;
 }
@@ -158,42 +151,21 @@ esp_err_t USB::sendData(uint8_t *data, size_t dataSize) {
 }
 
 esp_err_t USB::sendString(const char *str) {
-  esp_err_t errorState = ESP_OK;
-  size_t usbDataSize;
-
-  if (serialIsOpen == false) {
-    ESP_LOGW(TAG, "USB sendString - Serial port is not opened.");
+  if (!serialIsOpen || !isInitialized || str == nullptr) {
     return ESP_FAIL;
   }
-
-  if (isInitialized == false) {
-    ESP_LOGW(TAG, "USB sendString - Serial port is not initalized.");
-    return ESP_FAIL;
-  }
-
-  if (str == nullptr) {
-    ESP_LOGW(TAG, "USB sendString - there is no string data to send.");
-    return ESP_FAIL;
-  }
-
-  ESP_LOGW("USB", "Trying to send: serialIsOpen=%d, isInitialized=%d",
-           serialIsOpen, isInitialized);
 
   size_t dataSize = strlen(str);
-  usbDataSize = tinyusb_cdcacm_write_queue(
+
+  size_t queued = tinyusb_cdcacm_write_queue(
       USB_INTERFACE_PORT, reinterpret_cast<const uint8_t *>(str), dataSize);
 
-  if (usbDataSize != dataSize) {
-    ESP_LOGW(TAG, "USB sendString - Not all bytes queued.");
+  if (queued != dataSize) {
+    ESP_LOGW(TAG, "USB sendString - Not all bytes queued (%d/%d).", queued, dataSize);
     return ESP_FAIL;
   }
 
-  errorState = tinyusb_cdcacm_write_flush(USB_INTERFACE_PORT, 0);
-
-  if (errorState != ESP_OK) {
-    ESP_LOGW(TAG, "USB sendString - USB cannot send data.");
-    return ESP_FAIL;
-  }
+  tinyusb_cdcacm_write_flush(USB_INTERFACE_PORT, 0);
 
   return ESP_OK;
 }

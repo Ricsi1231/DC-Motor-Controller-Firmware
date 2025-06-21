@@ -22,7 +22,7 @@ void MotorCommHandler::process() {
 
 void MotorCommHandler::startTask() {
   if (taskHandle == nullptr) {
-    xTaskCreate(commTaskWrapper, "MotorCommTask", 4096, this, 5, &taskHandle);
+    xTaskCreate(commTaskWrapper, "MotorCommTask", 4096, this, 10, &taskHandle);
   }
 }
 
@@ -76,16 +76,19 @@ void MotorCommHandler::sendMotorState(float degrees) {
   usb.sendString(msg);
 }
 
-void MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
+esp_err_t MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
   char msg[64];
   esp_err_t usbState = ESP_OK;
 
   snprintf(msg, sizeof(msg), "%s%.2f,%.2f,%.2f\n", MSG_PID_REPLY, kp, ki, kd);
+  ESP_LOGI("Comm", "sendPIDParams: %s", msg); // <- debug
   usbState = usb.sendString(msg);
 
   if (usbState == ESP_OK) {
     pidRequested = false;
   }
+
+  return usbState;
 
   // usb.flushRxBuffer();
 }
@@ -124,19 +127,25 @@ void MotorCommHandler::clearStopFlag(bool stop) {
   portEXIT_CRITICAL(&spinlock);
 }
 
-bool MotorCommHandler::isNewTargetReceived() const { 
-  bool value;
-  portENTER_CRITICAL(&spinlock);
-  value = newTarget;
-  portEXIT_CRITICAL(&spinlock);
-  return value; 
-}
-
 bool MotorCommHandler::isNewPIDReceived() const {
   bool value;
-  portENTER_CRITICAL(&spinlock);
+  taskENTER_CRITICAL(&spinlock);  
   value = newPID;
+  taskEXIT_CRITICAL(&spinlock);
+  return value;
+}
+
+void MotorCommHandler::clearPIDRequest() {
+  portENTER_CRITICAL(&spinlock);
+  pidRequested = false;
   portEXIT_CRITICAL(&spinlock);
+}
+
+bool MotorCommHandler::isNewTargetReceived() const {
+  bool value;
+  taskENTER_CRITICAL(&spinlock);
+  value = newTarget;
+  taskEXIT_CRITICAL(&spinlock);
   return value;
 }
 
@@ -163,5 +172,14 @@ bool MotorCommHandler::isMotorEnabled() const {
   portEXIT_CRITICAL(&spinlock);
   return value;
 }
+
+bool MotorCommHandler::isUSBOpen() const {
+  bool value;
+  portENTER_CRITICAL(&spinlock);
+  value = usb.usbIsConnected();
+  portEXIT_CRITICAL(&spinlock);
+  return value;
+}
+
 } // namespace Communication
 } // namespace DC_Motor_Controller_Firmware
