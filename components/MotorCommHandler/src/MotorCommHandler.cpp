@@ -80,7 +80,7 @@ esp_err_t MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
   esp_err_t usbState = ESP_OK;
 
   snprintf(msg, sizeof(msg), "%s%.2f,%.2f,%.2f\n", MSG_PID_REPLY, kp, ki, kd);
-  ESP_LOGI("Comm", "sendPIDParams: %s", msg); // <- debug
+  ESP_LOGI("Comm", "sendPIDParams: %s", msg); 
   usbState = usb.sendString(msg);
 
   if (usbState == ESP_OK) {
@@ -88,8 +88,6 @@ esp_err_t MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
   }
 
   return usbState;
-
-  // usb.flushRxBuffer();
 }
 
 void MotorCommHandler::clearTarget() {
