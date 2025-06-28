@@ -122,6 +122,18 @@ void RGBLed::setBrightness(uint8_t percent) {
     setRGBColor(currentRed, currentGreen, currentBlue);
 }
 
+void RGBLed::turnOffLed() {
+    setRGBColor(0, 0, 0);
+    ledStatus = 0;
+}
+
+void RGBLed::turnOnLed() {
+    setRGBColor(currentRed, currentGreen, currentBlue);
+    ledStatus = 1;
+}
+
+bool RGBLed::isOn() const { return ledStatus; }
+
 void RGBLed::fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) {
     const int delayPerStep = durationMs / fadeSteps;
 

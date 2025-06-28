@@ -51,7 +51,7 @@ private:
 
     uint8_t blinkDelay = 0;
 
-    uint8_t ledStatus = 0;
+    bool ledStatus = 0;
 
     bool initalized = false;
 
