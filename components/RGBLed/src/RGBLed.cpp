@@ -8,6 +8,8 @@ RGBLed::RGBLed(ledIoConfig config)
     : config(config) {
 }
 
+RGBLed::~RGBLed() { }
+
 esp_err_t RGBLed::init() {
   esp_err_t errorEsp = ESP_OK;
 

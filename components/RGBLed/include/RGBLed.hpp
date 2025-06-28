@@ -28,7 +28,8 @@ struct ledIoConfig {
 
 class RGBLed {
 public:
-    RGBLed(ledIoConfig config);
+    explicit RGBLed(ledIoConfig config);
+    ~RGBLed();
 
     esp_err_t init();
     
