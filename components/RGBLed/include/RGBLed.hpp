@@ -36,7 +36,7 @@ public:
     void setColor(PresetColor color);
     void blinkLed(uint8_t blinkDelay, uint8_t blinkTimes);
 
-    void setBrightness(float brightness);
+    void setBrightness(uint8_t percent);
 
     void turnOffLed();
     void turnOnLed();

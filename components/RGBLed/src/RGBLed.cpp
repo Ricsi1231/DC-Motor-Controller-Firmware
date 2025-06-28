@@ -116,6 +116,12 @@ void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
     }
 }
 
+void RGBLed::setBrightness(uint8_t percent) {
+    uint8_t clampedPercent = std::min(percent, static_cast<uint8_t>(100));
+    brightness = static_cast<float>(clampedPercent) / 100.0f;
+    setRGBColor(currentRed, currentGreen, currentBlue);
+}
+
 void RGBLed::fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) {
     const int delayPerStep = durationMs / fadeSteps;
 
