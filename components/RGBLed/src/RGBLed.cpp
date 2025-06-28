@@ -102,6 +102,20 @@ void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetB
     fadeRGB(scaledRed, scaledGreen, scaledBlue, durationMs);
 }
 
+void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
+    const uint8_t savedRed = currentRed;
+    const uint8_t savedGreen = currentGreen;
+    const uint8_t savedBlue = currentBlue;
+
+    for (uint8_t i = 0; i < blinkTimes; ++i) {
+        setRGBColor(0, 0, 0);
+        vTaskDelay(pdMS_TO_TICKS(blinkDelay));
+
+        setRGBColor(savedRed, savedGreen, savedBlue);
+        vTaskDelay(pdMS_TO_TICKS(blinkDelay));
+    }
+}
+
 void RGBLed::fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) {
     const int delayPerStep = durationMs / fadeSteps;
 

@@ -34,7 +34,7 @@ public:
     
     void fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs);
     void setColor(PresetColor color);
-    void blinkLed(uint8_t blinkDelay);
+    void blinkLed(uint8_t blinkDelay, uint8_t blinkTimes);
 
     void setBrightness(float brightness);
 
