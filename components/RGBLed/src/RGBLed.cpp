@@ -60,5 +60,35 @@ esp_err_t RGBLed::init() {
   return ESP_OK;
 }
 
+void RGBLed::setColor(PresetColor color) {
+    switch (color) {
+        case PresetColor::RED:
+            setColor(255, 0, 0);
+            break;
+        case PresetColor::GREEN:
+            setColor(0, 255, 0);
+            break;
+        case PresetColor::BLUE:
+            setColor(0, 0, 255);
+            break;
+        case PresetColor::YELLOW:
+            setColor(255, 255, 0);
+            break;
+        case PresetColor::CYAN:
+            setColor(0, 255, 255);
+            break;
+        case PresetColor::MAGENTA:
+            setColor(255, 0, 255);
+            break;
+        case PresetColor::WHITE:
+            setColor(255, 255, 255);
+            break;
+        case PresetColor::OFF:
+        default:
+            turnOffLed();
+            break;
+    }
+}
+
 } // namespace RGB
 } // namespace DC_Motor_Controller_Firmware

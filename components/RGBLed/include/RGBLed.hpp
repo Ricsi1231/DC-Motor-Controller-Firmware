@@ -43,7 +43,6 @@ public:
     void turnOnLed();
     bool isOn() const;
 
-
 private:
     ledIoConfig config;
 
