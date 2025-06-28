@@ -1,5 +1,6 @@
 #include "esp_log.h"
 #include "RGBLed.hpp"
+#include <algorithm>
 
 namespace DC_Motor_Controller_Firmware {
 namespace RGB {
@@ -63,31 +64,84 @@ esp_err_t RGBLed::init() {
 void RGBLed::setColor(PresetColor color) {
     switch (color) {
         case PresetColor::RED:
-            setColor(255, 0, 0);
+            setRGBColor(255, 0, 0);
             break;
         case PresetColor::GREEN:
-            setColor(0, 255, 0);
+            setRGBColor(0, 255, 0);
             break;
         case PresetColor::BLUE:
-            setColor(0, 0, 255);
+            setRGBColor(0, 0, 255);
             break;
         case PresetColor::YELLOW:
-            setColor(255, 255, 0);
+            setRGBColor(255, 255, 0);
             break;
         case PresetColor::CYAN:
-            setColor(0, 255, 255);
+            setRGBColor(0, 255, 255);
             break;
         case PresetColor::MAGENTA:
-            setColor(255, 0, 255);
+            setRGBColor(255, 0, 255);
             break;
         case PresetColor::WHITE:
-            setColor(255, 255, 255);
+            setRGBColor(255, 255, 255);
             break;
-        case PresetColor::OFF:
         default:
             turnOffLed();
             break;
     }
+}
+
+void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) {
+    uint8_t percentRed   = std::min(targetRed, static_cast<uint8_t>(100));
+    uint8_t percentGreen = std::min(targetGreen, static_cast<uint8_t>(100));
+    uint8_t percentBlue  = std::min(targetBlue, static_cast<uint8_t>(100));
+
+    uint8_t scaledRed   = static_cast<uint8_t>((percentRed   * 255) / 100);
+    uint8_t scaledGreen = static_cast<uint8_t>((percentGreen * 255) / 100);
+    uint8_t scaledBlue  = static_cast<uint8_t>((percentBlue  * 255) / 100);
+
+    fadeRGB(scaledRed, scaledGreen, scaledBlue, durationMs);
+}
+
+void RGBLed::fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) {
+    const int delayPerStep = durationMs / fadeSteps;
+
+    int diffR = static_cast<int>(targetRed) - static_cast<int>(currentRed);
+    int diffG = static_cast<int>(targetGreen) - static_cast<int>(currentGreen);
+    int diffB = static_cast<int>(targetBlue) - static_cast<int>(currentBlue);
+
+    for (int i = 1; i <= fadeSteps; ++i) {
+        uint8_t r = currentRed + diffR * i / fadeSteps;
+        uint8_t g = currentGreen + diffG * i / fadeSteps;
+        uint8_t b = currentBlue + diffB * i / fadeSteps;
+
+        setRGBColor(r, g, b);
+        vTaskDelay(pdMS_TO_TICKS(delayPerStep));
+    }
+
+    currentRed = targetRed;
+    currentGreen = targetGreen;
+    currentBlue = targetBlue;
+}
+
+void RGBLed::setRGBColor(uint8_t red, uint8_t green, uint8_t blue) {
+    currentRed = red;
+    currentGreen = green;
+    currentBlue = blue;
+
+    uint32_t scaledRed = static_cast<uint32_t>(red * brightness);
+    uint32_t scaledGreen = static_cast<uint32_t>(green * brightness);
+    uint32_t scaledBlue = static_cast<uint32_t>(blue * brightness);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.redPwmChannel, scaledRed);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.redPwmChannel);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.greenPwmChannel, scaledGreen);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.greenPwmChannel);
+
+    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.bluePwmChannel, scaledBlue);
+    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.bluePwmChannel);
+
+    ledStatus = (scaledRed || scaledGreen || scaledBlue) ? 1 : 0;
 }
 
 } // namespace RGB

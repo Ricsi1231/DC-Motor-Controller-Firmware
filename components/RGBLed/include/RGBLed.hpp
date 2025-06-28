@@ -32,9 +32,8 @@ public:
 
     esp_err_t init();
     
-    void setColor(PresetColor color);
     void fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs);
-
+    void setColor(PresetColor color);
     void blinkLed(uint8_t blinkDelay);
 
     void setBrightness(float brightness);
@@ -56,8 +55,13 @@ private:
 
     bool initalized = false;
 
+    uint8_t fadeSteps = 32;
+
+    float brightness = 1.0f;
+
     static constexpr const char* TAG = "RGB_LED";
 
+    void fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs);
     void setRGBColor(uint8_t red, uint8_t green, uint8_t blue);
 };
 
