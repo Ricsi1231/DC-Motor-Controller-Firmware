@@ -1,11 +1,12 @@
 #pragma once
 
-#include "USB.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "driver/gpio.h"
+#include "driver/ledc.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace RGB {
@@ -14,9 +15,20 @@ enum class PresetColor {
     RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, WHITE
 };
 
+struct ledIoConfig {
+    gpio_num_t pinRed;
+    gpio_num_t pinGreen;
+    gpio_num_t pinBlue;
+
+    ledc_channel_t redPwmChannel;
+    ledc_channel_t greenPwmChannel;
+    ledc_channel_t bluePwmChannel;
+};
+
+
 class RGBLed {
 public:
-    RGBLed(gpio_num_t pinRed, gpio_num_t pinGreen, gpio_num_t pinBlue);
+    RGBLed(ledIoConfig config);
 
     esp_err_t init();
     
@@ -33,17 +45,19 @@ public:
 
 
 private:
-    gpio_num_t pinRed;
-    gpio_num_t pinGreen;
-    gpio_num_t pinBlue;
+    ledIoConfig config;
 
     uint8_t currentRed = 0;
     uint8_t currentGreen = 0;
     uint8_t currentBlue = 0;
 
-    uint8_t blinkDelay;
+    uint8_t blinkDelay = 0;
 
-    uint8_t ledStatus;
+    uint8_t ledStatus = 0;
+
+    bool initalized = false;
+
+    static constexpr const char* TAG = "RGB_LED";
 
     void setRGBColor(uint8_t red, uint8_t green, uint8_t blue);
 };
