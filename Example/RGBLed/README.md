@@ -1,24 +1,36 @@
-# USB Loopback Example – TinyUSB CDC Communication
+# RGBLed Example – Basic RGB LED Control
 
-This example demonstrates basic USB serial communication using the `USB` module based on the TinyUSB CDC interface.
+This example demonstrates how to use the `RGBLed` class to control a 3-channel RGB LED with an ESP32 using PWM (via LEDC) and smooth effects such as blinking, color transitions, and brightness adjustment.
 
-## Features
+---
 
-- Initializes USB communication over CDC
-- Receives incoming data from a serial terminal or host application
-- Logs received bytes and echoes them back to the sender
+## What It Does
 
-## Behavior
+- Initializes the RGB LED with configurable pins and PWM channels
+- Sets LED brightness to 60%
+- Cycles through the **preset colors** (red, green, blue, yellow, cyan, magenta, white)
+- Blinks the LED twice for each color
+- Fades to a soft white between colors
+- Turns off the LED at the end of the cycle
+- Loops the above sequence indefinitely
 
-- Incoming USB data is printed using `ESP_LOG_BUFFER_HEXDUMP`
-- The same data is sent back immediately using `sendData()`
-- Runs in a FreeRTOS loop with a 10 ms delay
+---
 
-## Use Case
+## Pin Configuration
 
-Useful for validating USB connection, buffer integrity, and serial communication setup between ESP32-S3 and host systems (e.g., terminal emulator, LabVIEW).
+| LED Color | GPIO Pin     | PWM Channel     |
+|-----------|--------------|-----------------|
+| Red       | GPIO12       | LEDC_CHANNEL_0  |
+| Green     | GPIO13       | LEDC_CHANNEL_1  |
+| Blue      | GPIO14       | LEDC_CHANNEL_2  |
 
-## Dependencies
+These can be changed directly in the example:
 
-- TinyUSB (enabled via ESP-IDF)
-- `USB.hpp` implementation for USB CDC abstraction
+```cpp
+gpio_num_t RED_PIN = GPIO_NUM_21;
+gpio_num_t GREEN_PIN = GPIO_NUM_22;
+gpio_num_t BLUE_PIN = GPIO_NUM_23;
+
+ledc_channel_t RED_CH = LEDC_CHANNEL_0;
+ledc_channel_t GREEN_CH = LEDC_CHANNEL_1;
+ledc_channel_t BLUE_CH = LEDC_CHANNEL_2;
