@@ -14,6 +14,13 @@ esp_err_t RGBLed::init() {
   ledc_timer_config_t timer = {};
   ledc_channel_config_t channelConf = {};
 
+  if (config.redPwmChannel >= LEDC_CHANNEL_MAX ||
+    config.greenPwmChannel >= LEDC_CHANNEL_MAX ||
+    config.bluePwmChannel >= LEDC_CHANNEL_MAX) {
+    ESP_LOGE(TAG, "Invalid LEDC channel index");
+    return ESP_ERR_INVALID_ARG;
+}
+
   timer.speed_mode = LEDC_LOW_SPEED_MODE;
   timer.duty_resolution = LEDC_TIMER_10_BIT;
   timer.timer_num = LEDC_TIMER_0;
