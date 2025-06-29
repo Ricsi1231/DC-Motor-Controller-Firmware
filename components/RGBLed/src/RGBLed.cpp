@@ -178,7 +178,7 @@ bool RGBLed::isOn() const { return ledStatus; }
 
 void RGBLed::fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue,
                      uint16_t durationMs) {
-  const int delayPerStep = durationMs / fadeSteps;
+  const int delayPerStep = durationMs / std::max<uint8_t>(1, fadeSteps);
 
   int diffR = static_cast<int>(targetRed) - static_cast<int>(currentRed);
   int diffG = static_cast<int>(targetGreen) - static_cast<int>(currentGreen);
