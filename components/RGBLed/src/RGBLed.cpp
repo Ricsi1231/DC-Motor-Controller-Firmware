@@ -62,6 +62,11 @@ esp_err_t RGBLed::init() {
 }
 
 void RGBLed::setColor(PresetColor color) {
+  if (initalized == false) {
+    ESP_LOGW(TAG, "RGB is not initalized");
+    return;
+  }
+  
   switch (color) {
   case PresetColor::RED:
     setRGBColor(255, 0, 0);
@@ -92,6 +97,12 @@ void RGBLed::setColor(PresetColor color) {
 
 void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen,
                          uint8_t targetBlue, uint16_t durationMs) {
+
+  if (initalized == false) {
+    ESP_LOGW(TAG, "RGB is not initalized");
+    return;
+  }
+
   uint8_t percentRed = std::min(targetRed, static_cast<uint8_t>(100));
   uint8_t percentGreen = std::min(targetGreen, static_cast<uint8_t>(100));
   uint8_t percentBlue = std::min(targetBlue, static_cast<uint8_t>(100));
@@ -104,6 +115,11 @@ void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen,
 }
 
 void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
+  if (initalized == false) {
+    ESP_LOGW(TAG, "RGB is not initalized");
+    return;
+  }
+
   const uint8_t savedRed = currentRed;
   const uint8_t savedGreen = currentGreen;
   const uint8_t savedBlue = currentBlue;
@@ -118,17 +134,32 @@ void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
 }
 
 void RGBLed::setBrightness(uint8_t percent) {
+  if (initalized == false) {
+    ESP_LOGW(TAG, "RGB is not initalized");
+    return;
+  }
+
   uint8_t clampedPercent = std::min(percent, static_cast<uint8_t>(100));
   brightness = static_cast<float>(clampedPercent) / 100.0f;
   setRGBColor(currentRed, currentGreen, currentBlue);
 }
 
 void RGBLed::turnOffLed() {
+  if (initalized == false) {
+    ESP_LOGW(TAG, "RGB is not initalized");
+    return;
+  }
+
   setRGBColor(0, 0, 0);
   ledStatus = 0;
 }
 
 void RGBLed::turnOnLed() {
+  if (initalized == false) {
+    ESP_LOGW(TAG, "RGB is not initalized");
+    return;
+  }
+
   setRGBColor(currentRed, currentGreen, currentBlue);
   ledStatus = 1;
 }
