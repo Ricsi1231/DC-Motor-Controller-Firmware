@@ -180,14 +180,18 @@ void RGBLed::fadeRGB(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue,
                      uint16_t durationMs) {
   const int delayPerStep = durationMs / std::max<uint8_t>(1, fadeSteps);
 
-  int diffR = static_cast<int>(targetRed) - static_cast<int>(currentRed);
-  int diffG = static_cast<int>(targetGreen) - static_cast<int>(currentGreen);
-  int diffB = static_cast<int>(targetBlue) - static_cast<int>(currentBlue);
+  uint8_t startRed = currentRed;
+  uint8_t startGreen = currentGreen;
+  uint8_t startBlue = currentBlue;
+
+  int diffR = static_cast<int>(targetRed) - static_cast<int>(startRed);
+  int diffG = static_cast<int>(targetGreen) - static_cast<int>(startGreen);
+  int diffB = static_cast<int>(targetBlue) - static_cast<int>(startBlue);
 
   for (int i = 1; i <= fadeSteps; ++i) {
-    uint8_t r = currentRed + diffR * i / fadeSteps;
-    uint8_t g = currentGreen + diffG * i / fadeSteps;
-    uint8_t b = currentBlue + diffB * i / fadeSteps;
+    uint8_t r = startRed + diffR * i / fadeSteps;
+    uint8_t g = startGreen + diffG * i / fadeSteps;
+    uint8_t b = startBlue + diffB * i / fadeSteps;
 
     setRGBColor(r, g, b);
     vTaskDelay(pdMS_TO_TICKS(delayPerStep));
