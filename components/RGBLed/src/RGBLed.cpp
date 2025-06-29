@@ -33,23 +33,26 @@ esp_err_t RGBLed::init() {
   channelConf.hpoint = 0;
   channelConf.flags.output_invert = false;
   errorEsp = ledc_channel_config(&channelConf);
+  
   if (errorEsp != ESP_OK) {
     ESP_LOGW(TAG, "Failed to init red RGB led channel");
     return ESP_FAIL;
   }
 
-  channelConf.gpio_num = config.pinGreen;
-  channelConf.channel = config.greenPwmChannel;
-  errorEsp = ledc_channel_config(&channelConf);
+  ledc_channel_config_t greenChannel = channelConf;
+  greenChannel.gpio_num = config.pinGreen;
+  greenChannel.channel = config.greenPwmChannel;
+  errorEsp = ledc_channel_config(&greenChannel);
 
   if (errorEsp != ESP_OK) {
     ESP_LOGW(TAG, "Failed to init red RGB green channel");
     return ESP_FAIL;
   }
 
-  channelConf.gpio_num = config.pinBlue;
-  channelConf.channel = config.bluePwmChannel;
-  errorEsp = ledc_channel_config(&channelConf);
+  ledc_channel_config_t bluehannel = channelConf;
+  greenChannel.gpio_num = config.pinBlue;
+  greenChannel.channel = config.bluePwmChannel;
+  errorEsp = ledc_channel_config(&bluehannel);
 
   if (errorEsp != ESP_OK) {
     ESP_LOGW(TAG, "Failed to init blue RGB green channel");
