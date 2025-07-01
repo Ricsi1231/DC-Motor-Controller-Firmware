@@ -19,7 +19,12 @@ esp_err_t RGBLed::init() {
     config.bluePwmChannel >= LEDC_CHANNEL_MAX) {
     ESP_LOGE(TAG, "Invalid LEDC channel index");
     return ESP_ERR_INVALID_ARG;
-}
+  }
+
+  if (config.pinRed == GPIO_NUM_NC || config.pinGreen == GPIO_NUM_NC || config.pinBlue == GPIO_NUM_NC) {
+    ESP_LOGE(TAG, "Invalid GPIO pin in config");
+    return ESP_ERR_INVALID_ARG;
+  }
 
   timer.speed_mode = LEDC_LOW_SPEED_MODE;
   timer.duty_resolution = LEDC_TIMER_10_BIT;
