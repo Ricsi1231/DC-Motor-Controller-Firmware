@@ -61,23 +61,23 @@ esp_err_t RGBLed::init() {
     return ESP_FAIL;
   }
 
-  ledc_channel_config_t bluehannel = channelConf;
-  bluehannel.gpio_num = config.pinBlue;
-  bluehannel.channel = config.bluePwmChannel;
-  errorEsp = ledc_channel_config(&bluehannel);
+  ledc_channel_config_t blueChannel = channelConf;
+  blueChannel.gpio_num = config.pinBlue;
+  blueChannel.channel = config.bluePwmChannel;
+  errorEsp = ledc_channel_config(&blueChannel);
 
   if (errorEsp != ESP_OK) {
   ESP_LOGW(TAG, "Failed to init BLUE RGB channel");
     return ESP_FAIL;
   }
 
-  initalized = true;
+  initialized = true;
 
   return ESP_OK;
 }
 
 void RGBLed::setColor(PresetColor color) {
-  if (initalized == false) {
+  if (initialized == false) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }
@@ -113,7 +113,7 @@ void RGBLed::setColor(PresetColor color) {
 void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen,
                          uint8_t targetBlue, uint16_t durationMs) {
 
-  if (initalized == false) {
+  if (initialized == false) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }
@@ -130,7 +130,7 @@ void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen,
 }
 
 void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
-  if (initalized == false) {
+  if (initialized == false) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }
@@ -149,7 +149,7 @@ void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
 }
 
 void RGBLed::setBrightness(uint8_t percent) {
-  if (initalized == false) {
+  if (initialized == false) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }
@@ -160,7 +160,7 @@ void RGBLed::setBrightness(uint8_t percent) {
 }
 
 void RGBLed::turnOffLed() {
-  if (initalized == false) {
+  if (initialized == false) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }
@@ -170,7 +170,7 @@ void RGBLed::turnOffLed() {
 }
 
 void RGBLed::turnOnLed() {
-  if (initalized == false) {
+  if (initialized == false) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }

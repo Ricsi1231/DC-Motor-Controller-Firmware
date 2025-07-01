@@ -128,7 +128,7 @@ private:
 
   uint8_t blinkDelay = 0;     ///< Delay between LED blink on/off states (in ms)
   bool ledStatus = false;     ///< True if LED is currently on, false if off
-  bool initalized = false;    ///< Set to true after successful initialization
+  bool initialized = false;   ///< Set to true after successful initialization
 
   uint8_t fadeSteps = 32; ///< Number of steps used during fading
   float brightness = 1.0f; ///< Brightness factor (0.0–1.0)
