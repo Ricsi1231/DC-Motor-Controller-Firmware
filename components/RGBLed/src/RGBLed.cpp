@@ -42,7 +42,7 @@ esp_err_t RGBLed::init() {
   errorEsp = ledc_channel_config(&channelConf);
 
   if (errorEsp != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to init red RGB led channel");
+  ESP_LOGW(TAG, "Failed to init RED RGB channel");
     return ESP_FAIL;
   }
 
@@ -52,7 +52,7 @@ esp_err_t RGBLed::init() {
   errorEsp = ledc_channel_config(&greenChannel);
 
   if (errorEsp != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to init red RGB green channel");
+  ESP_LOGW(TAG, "Failed to init GREEN RGB channel");
     return ESP_FAIL;
   }
 
@@ -62,7 +62,7 @@ esp_err_t RGBLed::init() {
   errorEsp = ledc_channel_config(&bluehannel);
 
   if (errorEsp != ESP_OK) {
-    ESP_LOGW(TAG, "Failed to init blue RGB blue channel");
+  ESP_LOGW(TAG, "Failed to init BLUE RGB channel");
     return ESP_FAIL;
   }
 
