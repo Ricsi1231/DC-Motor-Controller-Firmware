@@ -57,8 +57,8 @@ esp_err_t RGBLed::init() {
   }
 
   ledc_channel_config_t bluehannel = channelConf;
-  greenChannel.gpio_num = config.pinBlue;
-  greenChannel.channel = config.bluePwmChannel;
+  bluehannel.gpio_num = config.pinBlue;
+  bluehannel.channel = config.bluePwmChannel;
   errorEsp = ledc_channel_config(&bluehannel);
 
   if (errorEsp != ESP_OK) {
