@@ -3,7 +3,8 @@
  * @brief RGB LED control class using PWM (LEDC) on ESP32.
  *
  * This class provides an interface to control a common-cathode RGB LED
- * using PWM signals with optional fading, brightness control, and color presets.
+ * using PWM signals with optional fading, brightness control, and color
+ * presets.
  */
 
 #pragma once
@@ -23,24 +24,16 @@ namespace RGB {
  * @enum PresetColor
  * @brief Predefined color preset.
  */
-enum class PresetColor {
-  RED,
-  GREEN,
-  BLUE,
-  YELLOW,
-  CYAN,
-  MAGENTA,
-  WHITE
-};
+enum class PresetColor { RED, GREEN, BLUE, YELLOW, CYAN, MAGENTA, WHITE };
 
 /**
  * @struct ledIoConfig
  * @brief GPIO and PWM channel configuration for RGB LED control.
  */
 struct ledIoConfig {
-  gpio_num_t pinRed;           ///< GPIO pin for red channel
-  gpio_num_t pinGreen;         ///< GPIO pin for green channel
-  gpio_num_t pinBlue;          ///< GPIO pin for blue channel
+  gpio_num_t pinRed;   ///< GPIO pin for red channel
+  gpio_num_t pinGreen; ///< GPIO pin for green channel
+  gpio_num_t pinBlue;  ///< GPIO pin for blue channel
 
   ledc_channel_t redPwmChannel;   ///< LEDC PWM channel for red
   ledc_channel_t greenPwmChannel; ///< LEDC PWM channel for green
@@ -71,7 +64,8 @@ public:
   esp_err_t init();
 
   /**
-   * @brief Smoothly fade to a specific RGB color using percentage input (0–100%).
+   * @brief Smoothly fade to a specific RGB color using percentage input
+   * (0–100%).
    *
    * This method maps percentage values to internal 8-bit brightness and
    * performs a smooth transition over the specified duration.
@@ -122,15 +116,15 @@ public:
 private:
   ledIoConfig config; ///< IO + PWM config struct
 
-  uint8_t currentRed = 0;     ///< Last applied red channel value (0–255)
-  uint8_t currentGreen = 0;   ///< Last applied green channel value (0–255)
-  uint8_t currentBlue = 0;    ///< Last applied blue channel value (0–255)
+  uint8_t currentRed = 0;   ///< Last applied red channel value (0–255)
+  uint8_t currentGreen = 0; ///< Last applied green channel value (0–255)
+  uint8_t currentBlue = 0;  ///< Last applied blue channel value (0–255)
 
-  uint8_t blinkDelay = 0;     ///< Delay between LED blink on/off states (in ms)
-  bool ledStatus = false;     ///< True if LED is currently on, false if off
-  bool initialized = false;   ///< Set to true after successful initialization
+  uint8_t blinkDelay = 0;   ///< Delay between LED blink on/off states (in ms)
+  bool ledStatus = false;   ///< True if LED is currently on, false if off
+  bool initialized = false; ///< Set to true after successful initialization
 
-  uint8_t fadeSteps = 32; ///< Number of steps used during fading
+  uint8_t fadeSteps = 32;  ///< Number of steps used during fading
   float brightness = 1.0f; ///< Brightness factor (0.0–1.0)
 
   static constexpr const char *TAG = "RGB_LED";

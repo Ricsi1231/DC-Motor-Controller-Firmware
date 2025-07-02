@@ -37,15 +37,15 @@ extern "C" void app_main() {
 
   led.setBrightness(BRIGHTNESS_PERCENT);
 
-  const PresetColor colors[] = {
-      PresetColor::RED, PresetColor::GREEN, PresetColor::BLUE,
-      PresetColor::YELLOW, PresetColor::CYAN, PresetColor::MAGENTA,
-      PresetColor::WHITE};
+  const PresetColor colors[] = {PresetColor::RED,  PresetColor::GREEN,
+                                PresetColor::BLUE, PresetColor::YELLOW,
+                                PresetColor::CYAN, PresetColor::MAGENTA,
+                                PresetColor::WHITE};
 
   printf("LED test started!\n");
 
   while (true) {
-    for (const auto& color : colors) {
+    for (const auto &color : colors) {
       led.setColor(color);
       vTaskDelay(pdMS_TO_TICKS(DELAY_MS));
 

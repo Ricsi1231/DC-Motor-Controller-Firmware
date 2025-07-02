@@ -15,13 +15,14 @@ esp_err_t RGBLed::init() {
   ledc_channel_config_t channelConf = {};
 
   if (config.redPwmChannel >= LEDC_CHANNEL_MAX ||
-    config.greenPwmChannel >= LEDC_CHANNEL_MAX ||
-    config.bluePwmChannel >= LEDC_CHANNEL_MAX) {
+      config.greenPwmChannel >= LEDC_CHANNEL_MAX ||
+      config.bluePwmChannel >= LEDC_CHANNEL_MAX) {
     ESP_LOGE(TAG, "Invalid LEDC channel index");
     return ESP_ERR_INVALID_ARG;
   }
 
-  if (config.pinRed == GPIO_NUM_NC || config.pinGreen == GPIO_NUM_NC || config.pinBlue == GPIO_NUM_NC) {
+  if (config.pinRed == GPIO_NUM_NC || config.pinGreen == GPIO_NUM_NC ||
+      config.pinBlue == GPIO_NUM_NC) {
     ESP_LOGE(TAG, "Invalid GPIO pin in config");
     return ESP_ERR_INVALID_ARG;
   }
@@ -47,7 +48,7 @@ esp_err_t RGBLed::init() {
   errorEsp = ledc_channel_config(&channelConf);
 
   if (errorEsp != ESP_OK) {
-  ESP_LOGW(TAG, "Failed to init RED RGB channel");
+    ESP_LOGW(TAG, "Failed to init RED RGB channel");
     return ESP_FAIL;
   }
 
@@ -57,7 +58,7 @@ esp_err_t RGBLed::init() {
   errorEsp = ledc_channel_config(&greenChannel);
 
   if (errorEsp != ESP_OK) {
-  ESP_LOGW(TAG, "Failed to init GREEN RGB channel");
+    ESP_LOGW(TAG, "Failed to init GREEN RGB channel");
     return ESP_FAIL;
   }
 
@@ -67,7 +68,7 @@ esp_err_t RGBLed::init() {
   errorEsp = ledc_channel_config(&blueChannel);
 
   if (errorEsp != ESP_OK) {
-  ESP_LOGW(TAG, "Failed to init BLUE RGB channel");
+    ESP_LOGW(TAG, "Failed to init BLUE RGB channel");
     return ESP_FAIL;
   }
 
@@ -81,7 +82,7 @@ void RGBLed::setColor(PresetColor color) {
     ESP_LOGW(TAG, "RGB is not initalized");
     return;
   }
-  
+
   switch (color) {
   case PresetColor::RED:
     setRGBColor(255, 0, 0);
