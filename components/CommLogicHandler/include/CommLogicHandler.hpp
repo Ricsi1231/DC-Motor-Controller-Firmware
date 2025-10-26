@@ -29,50 +29,49 @@ namespace DC_Motor_Controller_Firmware::Logic {
  * - Send motion completion signals
  */
 class CommLogicHandler {
-public:
-  /**
-   * @brief Constructor.
-   * @param comm Reference to MotorCommHandler instance for USB communication
-   * @param motor Reference to MotorController for control execution
-   * @param enc Reference to Encoder for feedback
-   */
-  CommLogicHandler(Communication::MotorCommHandler &comm,
-                   Control::MotorController &motor, Encoder::Encoder &enc);
+  public:
+    /**
+     * @brief Constructor.
+     * @param comm Reference to MotorCommHandler instance for USB communication
+     * @param motor Reference to MotorController for control execution
+     * @param enc Reference to Encoder for feedback
+     */
+    CommLogicHandler(Communication::MotorCommHandler& comm, Control::MotorController& motor, Encoder::Encoder& enc);
 
-  /**
-   * @brief Starts the FreeRTOS control logic task.
-   *
-   * The task continuously processes USB commands and controls the motor.
-   * If already running, calling this does nothing.
-   */
-  void startTask();
+    /**
+     * @brief Starts the FreeRTOS control logic task.
+     *
+     * The task continuously processes USB commands and controls the motor.
+     * If already running, calling this does nothing.
+     */
+    void startTask();
 
-private:
-  Communication::MotorCommHandler &motorComm; ///< USB communication interface
-  Control::MotorController &motorControl;     ///< Motor control interface
-  Encoder::Encoder &encoder;                  ///< Encoder feedback provider
+  private:
+    Communication::MotorCommHandler& motorComm;  ///< USB communication interface
+    Control::MotorController& motorControl;      ///< Motor control interface
+    Encoder::Encoder& encoder;                   ///< Encoder feedback provider
 
-  TaskHandle_t taskHandle = nullptr; ///< Logic task handle
+    TaskHandle_t taskHandle = nullptr;  ///< Logic task handle
 
-  float kp = 0.0f, ki = 0.0f, kd = 0.0f; ///< Current PID values
-  float current = 0.0f;                  ///< Current motor position
-  float offset = 0.0f;       ///< Requested offset from current position
-  float targetDegree = 0.0f; ///< Final target position
-  bool settled = false;      ///< Whether target has been reached
+    float kp = 0.0f, ki = 0.0f, kd = 0.0f;  ///< Current PID values
+    float current = 0.0f;                   ///< Current motor position
+    float offset = 0.0f;                    ///< Requested offset from current position
+    float targetDegree = 0.0f;              ///< Final target position
+    bool settled = false;                   ///< Whether target has been reached
 
-  bool getPIDValuesFirsTime = true; ///< Initialization flag for PID sync
+    bool getPIDValuesFirsTime = true;  ///< Initialization flag for PID sync
 
-  /**
-   * @brief Static task function executed in FreeRTOS context.
-   * @param param Pointer to CommLogicHandler instance
-   *
-   * Handles:
-   * - Reading encoder position
-   * - Applying incoming target/PID commands
-   * - Notifying position reached
-   * - Echoing back current PID values
-   */
-  static void taskFunc(void *param);
+    /**
+     * @brief Static task function executed in FreeRTOS context.
+     * @param param Pointer to CommLogicHandler instance
+     *
+     * Handles:
+     * - Reading encoder position
+     * - Applying incoming target/PID commands
+     * - Notifying position reached
+     * - Echoing back current PID values
+     */
+    static void taskFunc(void* param);
 };
 
-} // namespace DC_Motor_Controller_Firmware::Logic
+}  // namespace DC_Motor_Controller_Firmware::Logic
