@@ -6,7 +6,6 @@
 namespace DC_Motor_Controller_Firmware {
 namespace Encoder {
 
-static const char* TAG = "ENCODER";
 static pcnt_unit_handle_t s_pcntUnit = nullptr;
 
 static inline int clampToPcntRange(int value) {

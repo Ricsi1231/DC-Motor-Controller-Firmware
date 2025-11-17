@@ -5,9 +5,9 @@
 namespace DC_Motor_Controller_Firmware {
 namespace PID {
 
-FuzzyPIDController::FuzzyPIDController(const FuzzyPidConfig& cfg)
-    : config(cfg),
-      pidController(cfg.basePidConfig),
+FuzzyPIDController::FuzzyPIDController(const FuzzyPidConfig& config)
+    : config(config),
+      pidController(config.basePidConfig),
       fuzzy(nullptr),
       errorInput(nullptr),
       errorRateInput(nullptr),
@@ -40,9 +40,9 @@ FuzzyPIDController::FuzzyPIDController(const FuzzyPidConfig& cfg)
       kdB(nullptr),
       kdVB(nullptr),
       lastError(0.0f),
-      currentKp(cfg.basePidConfig.kp),
-      currentKi(cfg.basePidConfig.ki),
-      currentKd(cfg.basePidConfig.kd),
+      currentKp(config.basePidConfig.kp),
+      currentKi(config.basePidConfig.ki),
+      currentKd(config.basePidConfig.kd),
       lastTimeUs(0),
       fuzzyInitialized(false) {
     if (config.enableFuzzyAdaptation) {

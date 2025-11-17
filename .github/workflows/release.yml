@@ -1,0 +1,97 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  release-build:
+    name: Release Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Setup ESP-IDF
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4
+          target: esp32s3
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [ "${{ github.ref_type }}" == "tag" ]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=$(cat VERSION.txt || echo "dev")
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Build release firmware
+        run: |
+          . ${IDF_PATH}/export.sh
+          idf.py build
+
+      - name: Generate release artifacts
+        run: |
+          . ${IDF_PATH}/export.sh
+          mkdir -p release
+          cp build/*.bin release/ || true
+          cp build/bootloader/bootloader.bin release/ || true
+          cp build/partition_table/partition-table.bin release/ || true
+          idf.py size > release/size-report.txt
+          idf.py size-components > release/size-components.txt
+
+      - name: Create release archive
+        run: |
+          cd release
+          tar -czf ../CoreDrive-Firmware-${{ steps.version.outputs.version }}.tar.gz *
+
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            CoreDrive-Firmware-${{ steps.version.outputs.version }}.tar.gz
+            release/*.bin
+            release/size-report.txt
+          body: |
+            ## CoreDrive Main Controller Firmware ${{ steps.version.outputs.version }}
+
+            ### Release Artifacts
+            - `CoreDrive-Firmware-${{ steps.version.outputs.version }}.tar.gz` - Complete firmware package
+            - `*.bin` - Individual binary files
+            - `size-report.txt` - Firmware size analysis
+
+            ### Flash Instructions
+            ```bash
+            # Extract the archive
+            tar -xzf CoreDrive-Firmware-${{ steps.version.outputs.version }}.tar.gz
+
+            # Flash using esptool (adjust port as needed)
+            esptool.py --port /dev/ttyUSB0 write_flash \
+              0x0 bootloader.bin \
+              0x8000 partition-table.bin \
+              0x10000 CoreDrive-Main-Controller-Firmware.bin
+            ```
+
+            ### Build Information
+            - ESP-IDF Version: v5.4
+            - Target: ESP32-S3
+            - Build Date: ${{ github.event.head_commit.timestamp }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-release-${{ steps.version.outputs.version }}
+          path: release/
+          retention-days: 90

@@ -177,6 +177,8 @@ class SpeedEstimator {
     float rpmFiltered = 0.0f;  ///< Filtered hybrid RPM
     float rpmRaw = 0.0f;       ///< Unfiltered hybrid RPM
 
+    static constexpr char TAG[] = "ENCODER_PROCESSING";  ///< Logging tag
+
   public:
     /**
      * @brief Convert period in microseconds to “per-minute” scale factor.
@@ -239,6 +241,8 @@ class DirectionDetector {
     motorDirection currentDirection = motorDirection::RIGHT;  ///< Last accepted direction
     int64_t lastDirectionAccum = 0;                           ///< Tick anchor at last switch
     uint32_t lastDirectionChangeMs = 0;                       ///< Timestamp of last switch (ms)
+
+    static constexpr char TAG[] = "ENCODER_PROCESSING";  ///< Logging tag
 };
 
 }  // namespace Encoder

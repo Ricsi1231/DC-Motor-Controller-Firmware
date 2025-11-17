@@ -6,49 +6,45 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  IDF_VERSION: v5.4
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: espressif/idf:v5.4
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/checkout@v4
         with:
-          python-version: 3.11
+          submodules: 'recursive'
 
-      - name: Install tools
+      - name: Install development tools
         run: |
-          sudo apt update
-          sudo apt install -y clang-format cppcheck
-
-      - name: Install ESP-IDF
-        run: |
-          git clone --recursive https://github.com/espressif/esp-idf.git
-          cd esp-idf
-          ./install.sh
+          apt-get update
+          apt-get install -y clang-format cppcheck
 
       - name: Build firmware (ESP32-S3)
         run: |
-          . ./esp-idf/export.sh
-          idf.py set-target esp32s3
+          . $IDF_PATH/export.sh
           idf.py build
 
-      - name: Run clang-format
+      - name: Run clang-format check
         run: |
-          echo "Running clang-format (excluding ESP-IDF and managed stuff)..."
+          echo "Checking code formatting..."
           find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
             -not -path "./build/*" \
-            -not -path "./esp-idf/*" \
             -not -path "./managed_components/*" \
+            -not -path "./components/efll/*" \
             -not -path "./components/esp_*/*" \
             -exec clang-format --dry-run --Werror {} +
+          echo "Code formatting check passed"
 
       - name: Run cppcheck
         run: |
-          echo "Running cppcheck..."
+          echo "Running static analysis..."
           cppcheck --enable=all --inconclusive --error-exitcode=1 \
           --suppress=missingInclude \
           --suppress=missingIncludeSystem \
@@ -56,12 +52,23 @@ jobs:
           --quiet \
           --force \
           --inline-suppr \
-          -i esp-idf \
           -i managed_components \
           -i build \
           -i components/esp_* \
+          -i components/efll \
           --file-list=<(find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
-            -not -path "./esp-idf/*" \
             -not -path "./managed_components/*" \
             -not -path "./build/*" \
-            -not -path "./components/esp_*/*")
+            -not -path "./components/esp_*/*" \
+            -not -path "./components/efll/*")
+          echo "Static analysis passed"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-build
+          path: |
+            build/*.bin
+            build/*.elf
+            build/*.map
+          retention-days: 7

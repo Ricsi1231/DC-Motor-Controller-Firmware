@@ -154,6 +154,8 @@ class MotorCommHandler {
     bool stopRequested = false;  ///< Flag: STOP command received
     bool motorEnabled = true;    ///< Flag: motor is enabled or disabled
 
+    static constexpr char TAG[] = "MotorCommHandler";  ///< Logging tag
+
     /**
      * @brief Parses incoming USB message strings and updates internal state.
      * @param msg Null-terminated message string.

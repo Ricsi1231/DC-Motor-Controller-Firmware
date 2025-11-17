@@ -394,6 +394,8 @@ class Encoder {
 
     // Concurrency
     SemaphoreHandle_t encoderMutex = nullptr;  ///< Protects shared state
+
+    static constexpr char TAG[] = "ENCODER";  ///< Logging tag
 };
 
 }  // namespace Encoder

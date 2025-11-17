@@ -126,8 +126,8 @@ class USB {
     static uint8_t rxBuffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];  ///< RX buffer
     static size_t rxSize;                                        ///< Size of data in RX buffer
 
-    static const char* TAG;  ///< Log tag
-    bool messeageArived = false;
+    static constexpr char TAG[] = "USB";  ///< Logging tag
+    bool messageArrived = false;          ///< Flag indicating if a message has arrived
 
     static tinyusb_cdcacm_itf_t USB_INTERFACE_PORT;  ///< USB CDC interface used
 };

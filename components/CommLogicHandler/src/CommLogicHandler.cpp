@@ -41,8 +41,8 @@ void CommLogicHandler::taskFunc(void* param) {
         if (self->motorComm.wasPIDRequested()) {
             if (self->motorComm.isUSBOpen()) {
                 self->motorControl.getPID(self->kp, self->ki, self->kd);
-                esp_err_t res = self->motorComm.sendPIDParams(self->kp, self->ki, self->kd);
-                if (res != ESP_OK) {
+                esp_err_t sendResult = self->motorComm.sendPIDParams(self->kp, self->ki, self->kd);
+                if (sendResult != ESP_OK) {
                     self->motorComm.clearPIDRequest();
                 }
             } else {

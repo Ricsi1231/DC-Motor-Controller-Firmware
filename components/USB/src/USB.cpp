@@ -13,8 +13,6 @@ static portMUX_TYPE usbSpinLock = portMUX_INITIALIZER_UNLOCKED;
 
 tinyusb_cdcacm_itf_t USB::USB_INTERFACE_PORT = TINYUSB_CDC_ACM_0;
 
-const char* USB::TAG = "USB";
-
 size_t USB::rxSize;
 
 static inline bool messageArrived = false;

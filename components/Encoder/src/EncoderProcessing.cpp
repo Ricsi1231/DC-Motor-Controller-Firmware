@@ -5,8 +5,6 @@
 namespace DC_Motor_Controller_Firmware {
 namespace Encoder {
 
-static const char* TAG = "ENCODER_PROCESSING";
-
 SpeedEstimator::SpeedEstimator()
     : pulsesPerRevolution(1),
       periodUs(100000),

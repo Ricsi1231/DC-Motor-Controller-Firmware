@@ -25,7 +25,7 @@ DRV8876& DRV8876::operator=(DRV8876&& other) noexcept {
 
 esp_err_t DRV8876::init() {
     ESP_LOGI(TAG, "Init start (PH=%d, EN=%d, nFAULT=%d, nSLEEP=%d, PWM_CH=%d)", config.phPin, config.enPin, config.nFault, config.nSleep, config.pwmChannel);
-    esp_err_t ret = ESP_OK;
+    esp_err_t status = ESP_OK;
 
     if (config.minFrequency == 0) {
         config.minFrequency = 100;
@@ -59,19 +59,19 @@ esp_err_t DRV8876::init() {
     ioConf.intr_type = GPIO_INTR_DISABLE;
     ioConf.mode = GPIO_MODE_OUTPUT;
     ioConf.pin_bit_mask = (1ULL << config.phPin);
-    ret = gpio_config(&ioConf);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config(PH) failed: %s", esp_err_to_name(ret));
-        return ret;
+    status = gpio_config(&ioConf);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_config(PH) failed: %s", esp_err_to_name(status));
+        return status;
     }
 
     ioConf.intr_type = GPIO_INTR_DISABLE;
     ioConf.mode = GPIO_MODE_OUTPUT;
     ioConf.pin_bit_mask = (1ULL << config.nSleep);
-    ret = gpio_config(&ioConf);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config(nSLEEP) failed: %s", esp_err_to_name(ret));
-        return ret;
+    status = gpio_config(&ioConf);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_config(nSLEEP) failed: %s", esp_err_to_name(status));
+        return status;
     }
 
     gpio_config_t faultConf = {};
@@ -79,26 +79,26 @@ esp_err_t DRV8876::init() {
     faultConf.mode = GPIO_MODE_INPUT;
     faultConf.pin_bit_mask = (1ULL << config.nFault);
     faultConf.pull_up_en = GPIO_PULLUP_ENABLE;
-    ret = gpio_config(&faultConf);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_config(nFAULT) failed: %s", esp_err_to_name(ret));
-        return ret;
+    status = gpio_config(&faultConf);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_config(nFAULT) failed: %s", esp_err_to_name(status));
+        return status;
     }
 
-    ret = gpio_install_isr_service(0);
-    if (ret == ESP_ERR_INVALID_STATE) {
+    status = gpio_install_isr_service(0);
+    if (status == ESP_ERR_INVALID_STATE) {
         ESP_LOGW(TAG, "ISR service already installed");
-        ret = ESP_OK;
+        status = ESP_OK;
     }
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_install_isr_service failed: %s", esp_err_to_name(ret));
-        return ret;
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_install_isr_service failed: %s", esp_err_to_name(status));
+        return status;
     }
 
-    ret = gpio_isr_handler_add(config.nFault, faultISR, this);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "gpio_isr_handler_add failed: %s", esp_err_to_name(ret));
-        return ret;
+    status = gpio_isr_handler_add(config.nFault, faultISR, this);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "gpio_isr_handler_add failed: %s", esp_err_to_name(status));
+        return status;
     }
     ESP_LOGI(TAG, "nFAULT ISR attached");
 
@@ -108,10 +108,10 @@ esp_err_t DRV8876::init() {
     timer.timer_num = LEDC_TIMER_0;
     timer.freq_hz = config.frequency;
     timer.clk_cfg = LEDC_AUTO_CLK;
-    ret = ledc_timer_config(&timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ledc_timer_config failed: %s", esp_err_to_name(ret));
-        return ret;
+    status = ledc_timer_config(&timer);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "ledc_timer_config failed: %s", esp_err_to_name(status));
+        return status;
     }
     ESP_LOGI(TAG, "LEDC timer set (res=%d, freq=%" PRIu32 " Hz)", config.resolution, config.frequency);
 
@@ -124,10 +124,10 @@ esp_err_t DRV8876::init() {
     channelConf.hpoint = 0;
     channelConf.flags.output_invert = false;
 
-    ret = ledc_channel_config(&channelConf);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ledc_channel_config failed: %s", esp_err_to_name(ret));
-        return ret;
+    status = ledc_channel_config(&channelConf);
+    if (status != ESP_OK) {
+        ESP_LOGE(TAG, "ledc_channel_config failed: %s", esp_err_to_name(status));
+        return status;
     }
     ESP_LOGI(TAG, "LEDC channel configured on GPIO %d", config.enPin);
 
@@ -305,9 +305,9 @@ esp_err_t DRV8876::stop() {
 
     motorSpeed = 0;
 
-    esp_err_t ret = setPwmDuty(config.pwmChannel, motorStop);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Stop -> setPwmDuty failed: %s", esp_err_to_name(ret));
+    esp_err_t pwmStatus = setPwmDuty(config.pwmChannel, motorStop);
+    if (pwmStatus != ESP_OK) {
+        ESP_LOGE(TAG, "Stop -> setPwmDuty failed: %s", esp_err_to_name(pwmStatus));
         return ESP_FAIL;
     }
 
@@ -326,10 +326,10 @@ esp_err_t DRV8876::coast() {
     }
 
     motorSpeed = motorStop;
-    esp_err_t ret = setPwmDuty(config.pwmChannel, motorStop);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Coast -> setPwmDuty failed: %s", esp_err_to_name(ret));
-        return ret;
+    esp_err_t pwmStatus = setPwmDuty(config.pwmChannel, motorStop);
+    if (pwmStatus != ESP_OK) {
+        ESP_LOGE(TAG, "Coast -> setPwmDuty failed: %s", esp_err_to_name(pwmStatus));
+        return pwmStatus;
     }
 
     gpio_set_level(config.enPin, motorStop);
@@ -344,10 +344,10 @@ esp_err_t DRV8876::brake() {
     }
 
     motorSpeed = motorStop;
-    esp_err_t ret = setPwmDuty(config.pwmChannel, motorStop);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Brake -> setPwmDuty failed: %s", esp_err_to_name(ret));
-        return ret;
+    esp_err_t pwmStatus = setPwmDuty(config.pwmChannel, motorStop);
+    if (pwmStatus != ESP_OK) {
+        ESP_LOGE(TAG, "Brake -> setPwmDuty failed: %s", esp_err_to_name(pwmStatus));
+        return pwmStatus;
     }
 
     gpio_set_level(config.phPin, motorStop);
@@ -389,19 +389,19 @@ esp_err_t DRV8876::setPwmValue(ledc_timer_bit_t resolution, uint32_t frequency) 
     timer.freq_hz = frequency;
     timer.clk_cfg = LEDC_AUTO_CLK;
 
-    esp_err_t ret = ledc_timer_config(&timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ledc_timer_config (setPwmValue) failed: %s", esp_err_to_name(ret));
+    esp_err_t timerConfigStatus = ledc_timer_config(&timer);
+    if (timerConfigStatus != ESP_OK) {
+        ESP_LOGE(TAG, "ledc_timer_config (setPwmValue) failed: %s", esp_err_to_name(timerConfigStatus));
         return ESP_FAIL;
     }
 
     maxDuty = (1u << config.resolution) - 1u;
 
     uint8_t pwmVal = (motorSpeed * 255) / 100;
-    ret = setPwmDuty(config.pwmChannel, pwmVal);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "setPwmDuty after timer change failed: %s", esp_err_to_name(ret));
-        return ret;
+    esp_err_t dutySetStatus = setPwmDuty(config.pwmChannel, pwmVal);
+    if (dutySetStatus != ESP_OK) {
+        ESP_LOGE(TAG, "setPwmDuty after timer change failed: %s", esp_err_to_name(dutySetStatus));
+        return dutySetStatus;
     }
 
     ESP_LOGI(TAG, "PWM updated (res=%d, freq=%" PRIu32 " Hz, duty=%" PRIu32 "/255)", resolution, frequency, (uint32_t)pwmVal);

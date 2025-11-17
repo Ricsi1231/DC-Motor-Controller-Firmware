@@ -11,9 +11,9 @@
 
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
+#include "MotorControl.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "motorControl.hpp"
 
 namespace DC_Motor_Controller_Firmware::Logic {
 
@@ -60,6 +60,8 @@ class CommLogicHandler {
     bool settled = false;                   ///< Whether target has been reached
 
     bool getPIDValuesFirsTime = true;  ///< Initialization flag for PID sync
+
+    static constexpr char TAG[] = "CommLogicHandler";  ///< Logging tag
 
     /**
      * @brief Static task function executed in FreeRTOS context.

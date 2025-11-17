@@ -5,6 +5,13 @@
 # Excludes external libraries and build artifacts
 #
 
+set -e
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Change to project root (parent of scripts directory)
+cd "$SCRIPT_DIR/.."
+
 if ! command -v cppcheck &> /dev/null
 then
     echo "Error: cppcheck not found. Install it using: sudo apt install cppcheck"

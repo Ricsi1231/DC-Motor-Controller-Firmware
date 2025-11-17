@@ -40,8 +40,8 @@ void MotorCommHandler::parseMessage(const char* msg) {
         targetDegrees = strtof(msg + strlen(MSG_SET_DEG), nullptr);
         newTarget = true;
     } else if (strncmp(msg, MSG_SET_PID, strlen(MSG_SET_PID)) == 0) {
-        int ret = sscanf(msg + strlen(MSG_SET_PID), "%f,%f,%f", &pidKp, &pidKi, &pidKd);
-        if (ret == 3) {
+        int fieldsRead = sscanf(msg + strlen(MSG_SET_PID), "%f,%f,%f", &pidKp, &pidKi, &pidKd);
+        if (fieldsRead == 3) {
             newPID = true;
             portEXIT_CRITICAL(&spinlock);
             usb.sendString("ACK\n");
