@@ -14,11 +14,42 @@ DRV8876::DRV8876(const DRV8876Config& config) : config(config) {
 
 DRV8876::~DRV8876() { ESP_LOGI(TAG, "Destructor called"); }
 
-DRV8876::DRV8876(DRV8876&& other) noexcept : config(other.config) {}
+DRV8876::DRV8876(DRV8876&& other) noexcept
+    : config(other.config),
+      motorDirection(other.motorDirection),
+      motorSpeed(other.motorSpeed),
+      faultTriggered(other.faultTriggered.load()),
+      maxDuty(other.maxDuty),
+      previousSpeedValue(other.previousSpeedValue),
+      initialized(other.initialized),
+      enableMotorStopedLog(other.enableMotorStopedLog),
+      ledcMutex(other.ledcMutex),
+      ledcMutexTimeoutMs(other.ledcMutexTimeoutMs),
+      faultCallback(std::move(other.faultCallback)) {
+    other.ledcMutex = nullptr;
+    other.initialized = false;
+    other.motorSpeed = 0;
+    other.faultCallback = nullptr;
+}
 
 DRV8876& DRV8876::operator=(DRV8876&& other) noexcept {
     if (this != &other) {
         config = other.config;
+        motorDirection = other.motorDirection;
+        motorSpeed = other.motorSpeed;
+        faultTriggered.store(other.faultTriggered.load());
+        maxDuty = other.maxDuty;
+        previousSpeedValue = other.previousSpeedValue;
+        initialized = other.initialized;
+        enableMotorStopedLog = other.enableMotorStopedLog;
+        ledcMutex = other.ledcMutex;
+        ledcMutexTimeoutMs = other.ledcMutexTimeoutMs;
+        faultCallback = std::move(other.faultCallback);
+
+        other.ledcMutex = nullptr;
+        other.initialized = false;
+        other.motorSpeed = 0;
+        other.faultCallback = nullptr;
     }
     return *this;
 }

@@ -178,24 +178,28 @@ esp_err_t Encoder::init() {
     esp_err_t result = initPcnt();
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "initPcnt failed: %s (0x%x)", esp_err_to_name(result), result);
+        releaseResources();
         return result;
     }
 
     result = initPcntFilter();
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "initPcntFilter failed: %s (0x%x)", esp_err_to_name(result), result);
+        releaseResources();
         return result;
     }
 
     result = initPcntIo();
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "initPcntIo failed: %s (0x%x)", esp_err_to_name(result), result);
+        releaseResources();
         return result;
     }
 
     result = initWatchPoint();
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "initWatchPoint failed: %s (0x%x)", esp_err_to_name(result), result);
+        releaseResources();
         return result;
     }
 
@@ -214,6 +218,7 @@ esp_err_t Encoder::init() {
     result = initTimer();
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "initTimer failed: %s (0x%x)", esp_err_to_name(result), result);
+        releaseResources();
         return result;
     }
 
@@ -731,6 +736,10 @@ esp_err_t Encoder::initTimer() {
 }
 
 void Encoder::timerCallback(void* arg) {
+    if (arg == nullptr) {
+        return;
+    }
+
     Encoder* self = static_cast<Encoder*>(arg);
 
     int countSnapshot = 0;

@@ -294,8 +294,10 @@ class MotorControl {
     SemaphoreHandle_t targetMutex = nullptr;  ///< Mutex protecting target
     SemaphoreHandle_t configMutex = nullptr;  ///< Mutex protecting config
 
-    TaskHandle_t taskHandle = nullptr;  ///< Optional background control task
-    uint32_t updateHz = 100;            ///< Background control update rate (Hz)
+    TaskHandle_t taskHandle = nullptr;              ///< Optional background control task
+    uint32_t updateHz = 100;                        ///< Background control update rate (Hz)
+    volatile bool taskStopRequested = false;        ///< Flag to signal task to exit gracefully
+    SemaphoreHandle_t taskExitSemaphore = nullptr;  ///< Semaphore signaled when task exits
 
     float lastPidOut = 0.0f;        ///< Last computed PID output (for status)
     float lastVelDegPerSec = 0.0f;  ///< Last estimated angular velocity (deg/s)

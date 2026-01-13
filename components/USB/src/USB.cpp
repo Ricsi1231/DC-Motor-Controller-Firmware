@@ -18,6 +18,7 @@ const char* USB::TAG = "USB";
 size_t USB::rxSize;
 
 static inline bool messageArrived = false;
+static inline size_t rxDataLength = 0;
 
 USB::USB() { rxSize = 0; }
 
@@ -75,6 +76,14 @@ void USB::serialPortState(int itf, cdcacm_event_t* event) { serialIsOpen = stati
 
 void USB::usbCallback(int itf, cdcacm_event_t* event) {
     size_t length = 0;
+
+    taskENTER_CRITICAL_ISR(&usbSpinLock);
+    if (messageArrived) {
+        taskEXIT_CRITICAL_ISR(&usbSpinLock);
+        return;
+    }
+    taskEXIT_CRITICAL_ISR(&usbSpinLock);
+
     esp_err_t errorState = tinyusb_cdcacm_read(static_cast<tinyusb_cdcacm_itf_t>(itf), rxBuffer, CONFIG_TINYUSB_CDC_RX_BUFSIZE, &length);
 
     if (errorState != ESP_OK || length == 0) {
@@ -88,19 +97,26 @@ void USB::usbCallback(int itf, cdcacm_event_t* event) {
     rxBuffer[length] = '\0';
 
     taskENTER_CRITICAL_ISR(&usbSpinLock);
+    rxDataLength = length;
     messageArrived = true;
     taskEXIT_CRITICAL_ISR(&usbSpinLock);
-
-    ESP_LOGW(TAG, "Raw message: '%s'", reinterpret_cast<char*>(rxBuffer));
 }
 
 esp_err_t USB::receiveData(uint8_t* data, size_t* rxBufferSize) {
-    if (!serialIsOpen || !isInitialized || !messageArrived) return ESP_FAIL;
+    if (!serialIsOpen || !isInitialized) {
+        return ESP_FAIL;
+    }
 
     taskENTER_CRITICAL(&usbSpinLock);
-    size_t len = strlen(reinterpret_cast<const char*>(rxBuffer));
+    if (!messageArrived) {
+        taskEXIT_CRITICAL(&usbSpinLock);
+        return ESP_FAIL;
+    }
+
+    size_t len = rxDataLength;
     memcpy(data, rxBuffer, len + 1);
     *rxBufferSize = len;
+    rxDataLength = 0;
     messageArrived = false;
     taskEXIT_CRITICAL(&usbSpinLock);
 

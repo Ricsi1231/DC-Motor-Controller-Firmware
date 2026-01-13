@@ -21,6 +21,11 @@ MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PI
         ESP_LOGE(TAG, "Failed to create config mutex");
     }
 
+    taskExitSemaphore = xSemaphoreCreateBinary();
+    if (taskExitSemaphore == nullptr) {
+        ESP_LOGE(TAG, "Failed to create task exit semaphore");
+    }
+
     syncComponentsFromConfig();
     ESP_LOGI(TAG, "Ctor done");
 }
@@ -37,6 +42,11 @@ MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PI
     configMutex = xSemaphoreCreateMutex();
     if (configMutex == nullptr) {
         ESP_LOGE(TAG, "Failed to create config mutex");
+    }
+
+    taskExitSemaphore = xSemaphoreCreateBinary();
+    if (taskExitSemaphore == nullptr) {
+        ESP_LOGE(TAG, "Failed to create task exit semaphore");
     }
 
     useFuzzy = true;
@@ -57,6 +67,11 @@ MotorControl::~MotorControl() {
         vSemaphoreDelete(configMutex);
         configMutex = nullptr;
         ESP_LOGI(TAG, "Deleted config mutex");
+    }
+    if (taskExitSemaphore != nullptr) {
+        vSemaphoreDelete(taskExitSemaphore);
+        taskExitSemaphore = nullptr;
+        ESP_LOGI(TAG, "Deleted task exit semaphore");
     }
     ESP_LOGI(TAG, "Dtor done");
 }
@@ -82,6 +97,8 @@ MotorControl::MotorControl(MotorControl&& other) noexcept
     targetMutex = other.targetMutex;
     configMutex = other.configMutex;
     taskHandle = other.taskHandle;
+    taskStopRequested = other.taskStopRequested;
+    taskExitSemaphore = other.taskExitSemaphore;
 
     motionStartUs = other.motionStartUs;
 
@@ -109,6 +126,8 @@ MotorControl::MotorControl(MotorControl&& other) noexcept
     other.targetMutex = nullptr;
     other.configMutex = nullptr;
     other.taskHandle = nullptr;
+    other.taskStopRequested = false;
+    other.taskExitSemaphore = nullptr;
     other.motionDone.store(true, std::memory_order_relaxed);
     other.motionStartUs = 0;
 
@@ -226,9 +245,26 @@ void MotorControl::startTask() {
 
 void MotorControl::stopTask() {
     if (taskHandle != nullptr) {
-        ESP_LOGI(TAG, "Stopping control task");
-        vTaskDelete(taskHandle);
+        ESP_LOGI(TAG, "Requesting control task to stop");
+        taskStopRequested = true;
+
+        if (notifyDriven && taskHandle != nullptr) {
+            xTaskNotifyGive(taskHandle);
+        }
+
+        if (taskExitSemaphore != nullptr) {
+            BaseType_t taken = xSemaphoreTake(taskExitSemaphore, pdMS_TO_TICKS(2000));
+            if (taken != pdTRUE) {
+                ESP_LOGW(TAG, "Task did not exit in time, forcing delete");
+                vTaskDelete(taskHandle);
+            }
+        } else {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            vTaskDelete(taskHandle);
+        }
+
         taskHandle = nullptr;
+        taskStopRequested = false;
         ESP_LOGI(TAG, "Control task stopped");
     } else {
         ESP_LOGW(TAG, "stopTask: no task");
@@ -270,11 +306,14 @@ void MotorControl::taskFunc(void* param) {
     ESP_LOGI(TAG, "Task loop start (mode=%s, periodTicks=%lu)", self->notifyDriven ? "notify" : "poll",
              static_cast<unsigned long>(period));
 
-    while (true) {
+    while (!self->taskStopRequested) {
         if (self->notifyDriven == true) {
             uint32_t taken = ulTaskNotifyTake(pdTRUE, self->notifyBlockTicks);
             if (taken == 0) {
                 continue;
+            }
+            if (self->taskStopRequested) {
+                break;
             }
             self->update();
         } else {
@@ -282,6 +321,12 @@ void MotorControl::taskFunc(void* param) {
             vTaskDelayUntil(&lastWake, period);
         }
     }
+
+    ESP_LOGI(TAG, "Task loop exiting");
+    if (self->taskExitSemaphore != nullptr) {
+        xSemaphoreGive(self->taskExitSemaphore);
+    }
+    vTaskDelete(nullptr);
 }
 
 void MotorControl::setPID(float kp, float ki, float kd) {
@@ -552,12 +597,15 @@ void MotorControl::update() {
     };
 
     float currentTarget;
-    if (targetMutex != nullptr && xSemaphoreTake(targetMutex, portMAX_DELAY) == pdTRUE) {
+    if (targetMutex == nullptr) {
+        ESP_LOGE(TAG, "update: target mutex is null, using cached value");
+        currentTarget = target;
+    } else if (xSemaphoreTake(targetMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         currentTarget = target;
         xSemaphoreGive(targetMutex);
     } else {
+        ESP_LOGW(TAG, "update: target mutex timeout, using cached value");
         currentTarget = target;
-        ESP_LOGW(TAG, "update: target read without mutex");
     }
 
     float currentPos = encoder.getPositionInDegrees();
