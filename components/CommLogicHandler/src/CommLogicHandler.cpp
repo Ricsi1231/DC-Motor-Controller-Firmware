@@ -4,7 +4,7 @@
 
 using namespace DC_Motor_Controller_Firmware::Logic;
 
-CommLogicHandler::CommLogicHandler(Communication::MotorCommHandler& comm, Control::MotorController& motor, Encoder::Encoder& enc)
+CommLogicHandler::CommLogicHandler(Communication::MotorCommHandler& comm, Control::MotorControl& motor, Encoder::Encoder& enc)
     : motorComm(comm), motorControl(motor), encoder(enc) {}
 
 void CommLogicHandler::startTask() {

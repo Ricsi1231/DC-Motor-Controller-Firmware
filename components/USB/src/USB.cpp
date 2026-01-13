@@ -1,7 +1,7 @@
 #include "USB.hpp"
 #include "esp_log.h"
 #include "tinyusb.h"
-#include "tusb_cdc_acm.h"
+#include "tinyusb_cdc_acm.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace USB {
@@ -26,16 +26,15 @@ USB::~USB() {}
 esp_err_t USB::init() {
     esp_err_t returnValue = ESP_OK;
 
-    const tinyusb_config_t usbCfg = {
-        .device_descriptor = NULL, .string_descriptor = NULL, .external_phy = false, .configuration_descriptor = NULL, .vbus_monitor_io = -1};
+    const tinyusb_config_t usbCfg = {};
 
-    tinyusb_config_cdcacm_t amcCfg = {.usb_dev = TINYUSB_USBDEV_0,
-                                      .cdc_port = TINYUSB_CDC_ACM_0,
-                                      .rx_unread_buf_sz = 64,
-                                      .callback_rx = &usbCallback,
-                                      .callback_rx_wanted_char = NULL,
-                                      .callback_line_state_changed = NULL,
-                                      .callback_line_coding_changed = NULL};
+    tinyusb_config_cdcacm_t amcCfg = {
+        .cdc_port = TINYUSB_CDC_ACM_0,
+        .callback_rx = &usbCallback,
+        .callback_rx_wanted_char = NULL,
+        .callback_line_state_changed = NULL,
+        .callback_line_coding_changed = NULL,
+    };
 
     returnValue = tinyusb_driver_install(&usbCfg);
 
@@ -44,7 +43,7 @@ esp_err_t USB::init() {
         return ESP_FAIL;
     }
 
-    returnValue = tusb_cdc_acm_init(&amcCfg);
+    returnValue = tinyusb_cdcacm_init(&amcCfg);
 
     if (returnValue != ESP_OK) {
         ESP_LOGW(TAG, "USB init - cannot install acm config, trying to use other port");
@@ -52,7 +51,7 @@ esp_err_t USB::init() {
         amcCfg.cdc_port = TINYUSB_CDC_ACM_1;
         USB::USB_INTERFACE_PORT = TINYUSB_CDC_ACM_1;
 
-        returnValue = tusb_cdc_acm_init(&amcCfg);
+        returnValue = tinyusb_cdcacm_init(&amcCfg);
 
         if (returnValue != ESP_OK) {
             ESP_LOGW(TAG, "USB init - cannot install acm config, port or other problem");

@@ -739,7 +739,7 @@ void Encoder::timerCallback(void* arg) {
 
     do {
         baseBefore = self->baseCount;
-        pcnt_unit_get_count(pcntUnit, &countSnapshot);
+        pcnt_unit_get_count(self->pcntUnit, &countSnapshot);
         baseAfter = self->baseCount;
     } while (baseBefore != baseAfter);
 

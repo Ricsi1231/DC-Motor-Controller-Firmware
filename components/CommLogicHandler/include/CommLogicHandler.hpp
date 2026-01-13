@@ -13,7 +13,7 @@
 #include "MotorCommHandler.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "motorControl.hpp"
+#include "MotorControl.hpp"
 
 namespace DC_Motor_Controller_Firmware::Logic {
 
@@ -36,7 +36,7 @@ class CommLogicHandler {
      * @param motor Reference to MotorController for control execution
      * @param enc Reference to Encoder for feedback
      */
-    CommLogicHandler(Communication::MotorCommHandler& comm, Control::MotorController& motor, Encoder::Encoder& enc);
+    CommLogicHandler(Communication::MotorCommHandler& comm, Control::MotorControl& motor, Encoder::Encoder& enc);
 
     /**
      * @brief Starts the FreeRTOS control logic task.
@@ -48,7 +48,7 @@ class CommLogicHandler {
 
   private:
     Communication::MotorCommHandler& motorComm;  ///< USB communication interface
-    Control::MotorController& motorControl;      ///< Motor control interface
+    Control::MotorControl& motorControl;         ///< Motor control interface
     Encoder::Encoder& encoder;                   ///< Encoder feedback provider
 
     TaskHandle_t taskHandle = nullptr;  ///< Logic task handle

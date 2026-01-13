@@ -9,7 +9,7 @@
 
 #pragma once
 
-#include "tusb_cdc_acm.h"
+#include "tinyusb_cdc_acm.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace USB {

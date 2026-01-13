@@ -1,4 +1,4 @@
-#include "motorControl.hpp"
+#include "MotorControl.hpp"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "PID.hpp"
@@ -65,7 +65,7 @@ constexpr PidConfig pidConfig = {.kp = 2.5f,
                                  .errorTimeoutSec = 2.0f,
                                  .stuckTimeoutSec = 1.0f};
 
-constexpr MotorControllerConfig motorCfg = {.minSpeed = 3.0f,
+constexpr MotorControlConfig motorCfg = {.minSpeed = 3.0f,
                                             .maxSpeed = 95.0f,
                                             .minErrorToMove = 0.3f,
                                             .driftThreshold = 1.0f,
@@ -92,7 +92,7 @@ PIDController pid(pidConfig);
 
 FuzzyPidConfig fuzzyCfg = {};
 FuzzyPIDController fuzzy(fuzzyCfg);
-MotorController motorController(encoder, motor, pid, fuzzy, motorCfg);
+MotorControl motorControl(encoder, motor, pid, fuzzy, motorCfg);
 
 struct ExampleState {
     int currentSequenceStep = 0;
@@ -131,7 +131,7 @@ void runBasicPositioningDemo() {
         ESP_LOGI(TAG, "Moving to position: %.1f deg", positions[i]);
 
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(positions[i]);
+        motorControl.setTargetDegrees(positions[i]);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(50));
@@ -152,10 +152,10 @@ void runMotionProfilingDemo() {
     for (int i = 0; i < 2; i++) {
         ESP_LOGI(TAG, "Testing %s profile", profileNames[i]);
 
-        motorController.configureMotionProfile(profiles[i], 150.0f, 3000.0f);
+        motorControl.configureMotionProfile(profiles[i], 150.0f, 3000.0f);
 
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(270.0f);
+        motorControl.setTargetDegrees(270.0f);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -164,7 +164,7 @@ void runMotionProfilingDemo() {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(0.0f);
+        motorControl.setTargetDegrees(0.0f);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -179,12 +179,12 @@ void runMotionProfilingDemo() {
 void runSoftLimitsDemo() {
     ESP_LOGI(TAG, "Starting soft limits demo");
 
-    motorController.setSoftLimits(-120.0f, 120.0f, true);
+    motorControl.setSoftLimits(-120.0f, 120.0f, true);
     ESP_LOGI(TAG, "Set soft limits: -120 deg to 120 deg");
 
     ESP_LOGI(TAG, "Attempting to move to 150 deg (should be limited)");
     exampleState.waitingForMotion = true;
-    motorController.setTargetDegrees(150.0f);
+    motorControl.setTargetDegrees(150.0f);
 
     while (exampleState.waitingForMotion) {
         vTaskDelay(pdMS_TO_TICKS(50));
@@ -194,13 +194,13 @@ void runSoftLimitsDemo() {
 
     ESP_LOGI(TAG, "Attempting to move to -150 deg (should be limited)");
     exampleState.waitingForMotion = true;
-    motorController.setTargetDegrees(-150.0f);
+    motorControl.setTargetDegrees(-150.0f);
 
     while (exampleState.waitingForMotion) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
-    motorController.setSoftLimits(-360.0f, 360.0f, false);
+    motorControl.setSoftLimits(-360.0f, 360.0f, false);
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     ESP_LOGI(TAG, "Soft limits demo completed");
@@ -217,10 +217,10 @@ void runPIDTuningDemo() {
     for (auto& testCase : testCases) {
         ESP_LOGI(TAG, "Testing %s: Kp=%.2f, Ki=%.3f, Kd=%.3f", testCase.description, testCase.kp, testCase.ki, testCase.kd);
 
-        motorController.setPID(testCase.kp, testCase.ki, testCase.kd);
+        motorControl.setPID(testCase.kp, testCase.ki, testCase.kd);
 
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(90.0f);
+        motorControl.setTargetDegrees(90.0f);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -229,7 +229,7 @@ void runPIDTuningDemo() {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(0.0f);
+        motorControl.setTargetDegrees(0.0f);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -245,10 +245,10 @@ void runFeedForwardDemo() {
     ESP_LOGI(TAG, "Starting feed-forward demo");
 
     ESP_LOGI(TAG, "Testing without feed-forward");
-    motorController.setFeedForward(0.0f, 0.0f);
+    motorControl.setFeedForward(0.0f, 0.0f);
 
     exampleState.waitingForMotion = true;
-    motorController.setTargetDegrees(180.0f);
+    motorControl.setTargetDegrees(180.0f);
 
     while (exampleState.waitingForMotion) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -257,10 +257,10 @@ void runFeedForwardDemo() {
     vTaskDelay(pdMS_TO_TICKS(1000));
 
     ESP_LOGI(TAG, "Testing with feed-forward gains");
-    motorController.setFeedForward(0.02f, 0.15f);
+    motorControl.setFeedForward(0.02f, 0.15f);
 
     exampleState.waitingForMotion = true;
-    motorController.setTargetDegrees(0.0f);
+    motorControl.setTargetDegrees(0.0f);
 
     while (exampleState.waitingForMotion) {
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -276,7 +276,7 @@ void statusMonitorTask(void* param) {
 
     while (true) {
         if (exampleState.waitingForMotion) {
-            MotorStatus status = motorController.getStatus();
+            MotorStatus status = motorControl.getStatus();
 
             ESP_LOGI(TAG,
                      "Status - Pos: %6.2f deg | Target: %6.2f deg | Error: %5.2f deg | "
@@ -293,9 +293,9 @@ void demoSequenceTask(void* param) {
 
     vTaskDelay(pdMS_TO_TICKS(2000));
 
-    motorController.setOnMotionDone(onMotionDoneCallback, &exampleState);
-    motorController.setOnStall(onStallCallback, &exampleState);
-    motorController.setOnLimitHit(onLimitHitCallback, &exampleState);
+    motorControl.setOnMotionDone(onMotionDoneCallback, &exampleState);
+    motorControl.setOnStall(onStallCallback, &exampleState);
+    motorControl.setOnLimitHit(onLimitHitCallback, &exampleState);
 
     runBasicPositioningDemo();
     runMotionProfilingDemo();
@@ -307,7 +307,7 @@ void demoSequenceTask(void* param) {
 
     while (true) {
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(45.0f);
+        motorControl.setTargetDegrees(45.0f);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -316,7 +316,7 @@ void demoSequenceTask(void* param) {
         vTaskDelay(pdMS_TO_TICKS(2000));
 
         exampleState.waitingForMotion = true;
-        motorController.setTargetDegrees(-45.0f);
+        motorControl.setTargetDegrees(-45.0f);
 
         while (exampleState.waitingForMotion) {
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -350,11 +350,11 @@ extern "C" void app_main() {
         return;
     }
 
-    motorController.setUpdateHz(100);
-    motorController.setMotionTimeoutMs(10000);
-    motorController.configureControlTask(1, 15);
+    motorControl.setUpdateHz(100);
+    motorControl.setMotionTimeoutMs(10000);
+    motorControl.configureControlTask(1, 15);
 
-    motorController.startTask();
+    motorControl.startTask();
 
     ESP_LOGI(TAG, "Motor controller initialized and started");
 
