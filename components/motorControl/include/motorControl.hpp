@@ -381,14 +381,24 @@ class MotorController {
     bool notifyDriven = false;                    ///< If true, task waits on ulTaskNotifyTake() for updates.
     TickType_t notifyBlockTicks = portMAX_DELAY;  ///< Max ticks to block waiting for notify.
 
-    MotionEventCallback onMotionDoneCb = nullptr;
-    void* onMotionDoneUser = nullptr;
+    MotionEventCallback onMotionDoneCb = nullptr;  ///< Motion done callback function
+    void* onMotionDoneUser = nullptr;              ///< User data for motion done callback
 
-    MotionEventCallback onStallCb = nullptr;
-    void* onStallUser = nullptr;
+    MotionEventCallback onStallCb = nullptr;  ///< Stall detection callback function
+    void* onStallUser = nullptr;              ///< User data for stall callback
 
-    MotionEventCallback onLimitHitCb = nullptr;
-    void* onLimitHitUser = nullptr;
+    MotionEventCallback onLimitHitCb = nullptr;  ///< Limit hit callback function
+    void* onLimitHitUser = nullptr;              ///< User data for limit hit callback
+
+    uint64_t lastPidLogUs = 0;     ///< Timestamp (us) of last PID log output
+    uint64_t lastStateLogUs = 0;   ///< Timestamp (us) of last state log output
+    uint64_t lastCmdLogUs = 0;     ///< Timestamp (us) of last command log output
+    uint64_t lastStatusLogUs = 0;  ///< Timestamp (us) of last status log output
+
+    float slewOutPct = 0.0f;    ///< Current slew-limited output (%)
+    uint64_t lastSlewUs = 0;    ///< Timestamp (us) of last slew rate update
+
+    mutable float clampPrevValue = NAN;  ///< Previous clamped value for log deduplication
 
     static constexpr const char* TAG = "MotorController";  ///< Log tag
 

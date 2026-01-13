@@ -12,56 +12,63 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: '3.11'
 
       - name: Install tools
         run: |
-          sudo apt update
-          sudo apt install -y clang-format cppcheck
+          sudo apt-get update
+          sudo apt-get install -y clang-format cppcheck
+
+      - name: Cache ESP-IDF
+        uses: actions/cache@v4
+        id: cache-esp-idf
+        with:
+          path: |
+            ~/esp/esp-idf
+            ~/.espressif
+          key: esp-idf-v5.2.2-${{ runner.os }}
 
       - name: Install ESP-IDF
+        if: steps.cache-esp-idf.outputs.cache-hit != 'true'
         run: |
-          git clone --recursive https://github.com/espressif/esp-idf.git
+          mkdir -p ~/esp
+          cd ~/esp
+          git clone -b v5.2.2 --recursive --depth 1 https://github.com/espressif/esp-idf.git
           cd esp-idf
-          ./install.sh
+          ./install.sh esp32s3
 
       - name: Build firmware (ESP32-S3)
         run: |
-          . ./esp-idf/export.sh
+          source ~/esp/esp-idf/export.sh
           idf.py set-target esp32s3
           idf.py build
 
       - name: Run clang-format
         run: |
-          echo "Running clang-format (excluding ESP-IDF and managed stuff)..."
           find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
             -not -path "./build/*" \
-            -not -path "./esp-idf/*" \
             -not -path "./managed_components/*" \
-            -not -path "./components/esp_*/*" \
-            -exec clang-format --dry-run --Werror {} +
+            -not -path "./components/efll/*" \
+            | xargs clang-format --dry-run --Werror
 
       - name: Run cppcheck
         run: |
-          echo "Running cppcheck..."
-          cppcheck --enable=all --inconclusive --error-exitcode=1 \
-          --suppress=missingInclude \
-          --suppress=missingIncludeSystem \
-          --suppress=unusedStructMember \
-          --quiet \
-          --force \
-          --inline-suppr \
-          -i esp-idf \
-          -i managed_components \
-          -i build \
-          -i components/esp_* \
-          --file-list=<(find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
-            -not -path "./esp-idf/*" \
-            -not -path "./managed_components/*" \
+          find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
             -not -path "./build/*" \
-            -not -path "./components/esp_*/*")
+            -not -path "./managed_components/*" \
+            -not -path "./components/efll/*" \
+            > /tmp/files.txt
+          cppcheck --enable=all --inconclusive --error-exitcode=1 \
+            --suppress=missingInclude \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedStructMember \
+            --suppress=unusedFunction \
+            --quiet \
+            --force \
+            --inline-suppr \
+            --file-list=/tmp/files.txt

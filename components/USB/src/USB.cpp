@@ -118,7 +118,7 @@ esp_err_t USB::sendData(uint8_t* data, size_t dataSize) {
     }
 
     if (isInitialized == false) {
-        ESP_LOGW(TAG, "USB sendData - Serial port is not initalized.");
+        ESP_LOGW(TAG, "USB sendData - Serial port is not initialized.");
         return ESP_FAIL;
     }
 

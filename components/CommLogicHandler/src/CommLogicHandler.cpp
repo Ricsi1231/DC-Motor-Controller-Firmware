@@ -16,9 +16,9 @@ void CommLogicHandler::startTask() {
 void CommLogicHandler::taskFunc(void* param) {
     auto* self = static_cast<CommLogicHandler*>(param);
 
-    if (self->getPIDValuesFirsTime) {
+    if (self->getPIDValuesFirstTime) {
         self->motorControl.getPID(self->kp, self->ki, self->kd);
-        self->getPIDValuesFirsTime = false;
+        self->getPIDValuesFirstTime = false;
     }
 
     while (true) {
@@ -50,7 +50,7 @@ void CommLogicHandler::taskFunc(void* param) {
             }
         }
 
-        if ((fabsf(self->encoder.getPositionInDegrees() - self->targetDegree)) && !self->settled) {
+        if ((fabsf(self->encoder.getPositionInDegrees() - self->targetDegree) < SETTLE_TOLERANCE) && !self->settled) {
             if (self->motorComm.isUSBOpen()) {
                 self->motorComm.notifyMotorPositionReached();
             }

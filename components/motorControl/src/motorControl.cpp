@@ -96,6 +96,14 @@ MotorController::MotorController(MotorController&& other) noexcept
     onLimitHitCb = other.onLimitHitCb;
     onLimitHitUser = other.onLimitHitUser;
 
+    lastPidLogUs = other.lastPidLogUs;
+    lastStateLogUs = other.lastStateLogUs;
+    lastCmdLogUs = other.lastCmdLogUs;
+    lastStatusLogUs = other.lastStatusLogUs;
+    slewOutPct = other.slewOutPct;
+    lastSlewUs = other.lastSlewUs;
+    clampPrevValue = other.clampPrevValue;
+
     other.targetMutex = nullptr;
     other.configMutex = nullptr;
     other.taskHandle = nullptr;
@@ -112,6 +120,14 @@ MotorController::MotorController(MotorController&& other) noexcept
     other.onStallUser = nullptr;
     other.onLimitHitCb = nullptr;
     other.onLimitHitUser = nullptr;
+
+    other.lastPidLogUs = 0;
+    other.lastStateLogUs = 0;
+    other.lastCmdLogUs = 0;
+    other.lastStatusLogUs = 0;
+    other.slewOutPct = 0.0f;
+    other.lastSlewUs = 0;
+    other.clampPrevValue = NAN;
 
     ESP_LOGI(TAG, "Move Ctor done");
 }
@@ -475,28 +491,33 @@ void MotorController::setOnLimitHit(MotionEventCallback cb, void* user) {
 bool MotorController::isMotionDone() const { return motionDone.load(std::memory_order_relaxed); }
 
 float MotorController::clampToPercentRange(float signal) const {
-    static float previousValue = NAN;  // remembers across calls
     float clampedValue = signal;
 
     if (!std::isfinite(clampedValue)) {
-        if (clampedValue != previousValue) ESP_LOGW(TAG, "clamp: non-finite signal -> 0");
-        previousValue = 0.0f;
+        if (clampedValue != clampPrevValue) {
+            ESP_LOGW(TAG, "clamp: non-finite signal -> 0");
+        }
+        clampPrevValue = 0.0f;
         return 0.0f;
     }
 
     if (clampedValue > 100.0f) {
-        if (previousValue != 100.0f) ESP_LOGW(TAG, "clamp: %.3f -> 100.0", clampedValue);
-        previousValue = 100.0f;
+        if (clampPrevValue != 100.0f) {
+            ESP_LOGW(TAG, "clamp: %.3f -> 100.0", clampedValue);
+        }
+        clampPrevValue = 100.0f;
         return 100.0f;
     }
 
     if (clampedValue < -100.0f) {
-        if (previousValue != -100.0f) ESP_LOGW(TAG, "clamp: %.3f -> -100.0", clampedValue);
-        previousValue = -100.0f;
+        if (clampPrevValue != -100.0f) {
+            ESP_LOGW(TAG, "clamp: %.3f -> -100.0", clampedValue);
+        }
+        clampPrevValue = -100.0f;
         return -100.0f;
     }
 
-    previousValue = clampedValue;
+    clampPrevValue = clampedValue;
     return clampedValue;
 }
 
@@ -592,11 +613,6 @@ float MotorController::shapeSpeedWithProfile(float desiredSigned, uint64_t nowUs
 void MotorController::update() {
     uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
 
-    static uint64_t t_lastPid = 0;
-    static uint64_t t_lastState = 0;
-    static uint64_t t_lastCmd = 0;
-    static uint64_t t_lastStatus = 0;
-
     auto hit = [](uint64_t& t_last, uint64_t now, uint32_t ms) {
         if (now - t_last >= (uint64_t)ms * 1000ULL) {
             t_last = now;
@@ -615,7 +631,7 @@ void MotorController::update() {
     }
 
     float currentPos = encoder.getPositionInDegrees();
-    if (hit(t_lastState, nowUs, 500)) {
+    if (hit(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "update: t=%llu us, tgt=%.3f pos=%.3f", (unsigned long long)nowUs, currentTarget, currentPos);
     }
 
@@ -627,7 +643,7 @@ void MotorController::update() {
         if (wakeThLog < 0.0f) {
             wakeThLog = 0.0f;
         }
-        if (hit(t_lastState, nowUs, 500)) {
+        if (hit(lastStateLogUs, nowUs, 500)) {
             ESP_LOGD(TAG, "idle: drift=%.3f wakeTh=%.3f", drift, wakeThLog);
         }
         float wakeThreshold = wakeTh;
@@ -674,7 +690,7 @@ void MotorController::update() {
     pidSignal = clampToPercentRange(pidSignal);
     lastPidOut = pidSignal;
 
-    if (hit(t_lastPid, nowUs, 500)) {
+    if (hit(lastPidLogUs, nowUs, 500)) {
         float Kp = 0.0f, Ki = 0.0f, Kd = 0.0f;
         if (useFuzzy == true) {
             fuzzy.getCurrentGains(Kp, Ki, Kd);
@@ -688,7 +704,7 @@ void MotorController::update() {
     float refVelPct = profSpeedPercent;
     float ff = cfg.Kff_pos * refPos + cfg.Kff_vel * refVelPct;
 
-    if (hit(t_lastPid, nowUs, 500)) {
+    if (hit(lastPidLogUs, nowUs, 500)) {
         ESP_LOGV(TAG, "ff: Kpos=%.4f Kvel=%.4f refPos=%.3f refVel%%=%.2f ff=%.3f", cfg.Kff_pos, cfg.Kff_vel, refPos, refVelPct, ff);
     }
 
@@ -744,7 +760,7 @@ void MotorController::update() {
     float dpos = currentPos - lastPos;
     float vel = dpos * (float)updateHz;
     lastVelDegPerSec = vel;
-    if (hit(t_lastState, nowUs, 500)) {
+    if (hit(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "state: err=%.3f vel=%.3f deg/s", currentTarget - currentPos, vel);
     }
 
@@ -765,7 +781,7 @@ void MotorController::update() {
         } else {
             settleCounter = 0;
         }
-        if (hit(t_lastState, nowUs, 500)) {
+        if (hit(lastStateLogUs, nowUs, 500)) {
             ESP_LOGD(TAG, "settle: posOk=%d velOk=%d cnt=%d | stuckCnt=%d move=%.4f eps=%.4f", (int)posOk, (int)velOk, settleCounter, stuckCounter, moveAbs,
                      cfg.stuckPositionEpsilon);
         }
@@ -818,11 +834,9 @@ void MotorController::update() {
 
     pidWarmupCounter++;
 
-    static float lastOutPct = 0.0f;
-    static uint64_t lastSlewUs = 0;
     if (lastSlewUs == 0) {
         lastSlewUs = nowUs;
-        lastOutPct = 0.0f;
+        slewOutPct = 0.0f;
     }
 
     double dt = (double)(nowUs - lastSlewUs) / 1e6;
@@ -830,16 +844,16 @@ void MotorController::update() {
         dt = 0.0;
     }
     double maxDelta = (double)cfg.accelLimitPctPerSec * dt;
-    double reqDelta = (double)profiled - (double)lastOutPct;
+    double reqDelta = (double)profiled - (double)slewOutPct;
     if (reqDelta > maxDelta) {
         reqDelta = maxDelta;
     }
     if (reqDelta < -maxDelta) {
         reqDelta = -maxDelta;
     }
-    float slewOut = (float)((double)lastOutPct + reqDelta);
+    float slewOut = (float)((double)slewOutPct + reqDelta);
 
-    lastOutPct = slewOut;
+    slewOutPct = slewOut;
     lastSlewUs = nowUs;
 
     float speedPct = fabsf(slewOut);
@@ -854,7 +868,7 @@ void MotorController::update() {
     motor.setDirection(dir);
     motor.setSpeed(speedPct);
 
-    if (hit(t_lastCmd, nowUs, 250)) {
+    if (hit(lastCmdLogUs, nowUs, 250)) {
         const char* dirStr = "RIGHT";
         if (slewOut < 0.0f) {
             dirStr = "LEFT";
@@ -864,7 +878,7 @@ void MotorController::update() {
 
     lastPos = currentPos;
 
-    if (hit(t_lastStatus, nowUs, 1000)) {
+    if (hit(lastStatusLogUs, nowUs, 1000)) {
         MotorStatus s = getStatus();
         logMotorStatus(s);
     }

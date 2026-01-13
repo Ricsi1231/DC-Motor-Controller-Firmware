@@ -76,7 +76,7 @@ esp_err_t RGBLed::init() {
 
 void RGBLed::setColor(PresetColor color) {
     if (initialized == false) {
-        ESP_LOGW(TAG, "RGB is not initalized");
+        ESP_LOGW(TAG, "RGB is not initialized");
         return;
     }
 
@@ -110,7 +110,7 @@ void RGBLed::setColor(PresetColor color) {
 
 void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) {
     if (initialized == false) {
-        ESP_LOGW(TAG, "RGB is not initalized");
+        ESP_LOGW(TAG, "RGB is not initialized");
         return;
     }
 
@@ -127,7 +127,7 @@ void RGBLed::fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetB
 
 void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
     if (initialized == false) {
-        ESP_LOGW(TAG, "RGB is not initalized");
+        ESP_LOGW(TAG, "RGB is not initialized");
         return;
     }
 
@@ -146,7 +146,7 @@ void RGBLed::blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) {
 
 void RGBLed::setBrightness(uint8_t percent) {
     if (initialized == false) {
-        ESP_LOGW(TAG, "RGB is not initalized");
+        ESP_LOGW(TAG, "RGB is not initialized");
         return;
     }
 
@@ -157,7 +157,7 @@ void RGBLed::setBrightness(uint8_t percent) {
 
 void RGBLed::turnOffLed() {
     if (initialized == false) {
-        ESP_LOGW(TAG, "RGB is not initalized");
+        ESP_LOGW(TAG, "RGB is not initialized");
         return;
     }
 
@@ -167,7 +167,7 @@ void RGBLed::turnOffLed() {
 
 void RGBLed::turnOnLed() {
     if (initialized == false) {
-        ESP_LOGW(TAG, "RGB is not initalized");
+        ESP_LOGW(TAG, "RGB is not initialized");
         return;
     }
 
