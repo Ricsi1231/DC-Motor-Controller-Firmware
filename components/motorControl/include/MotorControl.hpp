@@ -8,14 +8,15 @@
 
 #pragma once
 
+#include "Actuator.hpp"
+#include "ControlLaw.hpp"
+#include "ControlTask.hpp"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "FuzzyPIDController.hpp"
-#include "MotionDetector.hpp"
-#include "MotionProfile.hpp"
+#include "MotionMonitor.hpp"
 #include "MotorControlConfig.hpp"
 #include "PID.hpp"
-#include "SoftLimits.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -32,6 +33,12 @@ namespace DC_Motor_Controller_Firmware::Control {
  *
  * Provides high-level closed-loop control by coordinating encoder feedback,
  * PID + feed-forward, motion profile shaping, and motor driver commands.
+ *
+ * This class acts as a facade that orchestrates four single-responsibility components:
+ * - ControlLaw: Computes control signals (PID, feed-forward, profile shaping)
+ * - MotionMonitor: Observes motion state and emits events (settle, stall, timeout)
+ * - Actuator: Drives hardware safely (slew limiting, direction/speed)
+ * - ControlTask: Manages FreeRTOS task timing
  */
 class MotorControl {
   public:
@@ -276,40 +283,33 @@ class MotorControl {
     void setOnLimitHit(MotionEventCallback cb, void* user = nullptr);
 
   private:
+    // External dependencies (references)
     Encoder::Encoder& encoder;      ///< Encoder feedback interface
-    DRV8876::DRV8876& motor;        ///< Motor driver interface
     PID::PIDController& pid;        ///< PID regulator instance
     PID::FuzzyPIDController fuzzy;  ///< Fuzzy-PID scheduler instance
+
+    // Single-responsibility components
+    ControlLaw controlLaw;          ///< Control signal computation
+    MotionMonitor motionMonitor;    ///< Motion state observation
+    Actuator actuator;              ///< Hardware interface
+    ControlTask controlTask;        ///< Task scheduling
+
+    // Configuration
     MotorControlConfig config;      ///< User-defined motion parameters
+    bool useFuzzy = false;          ///< True if using fuzzy PID controller
 
-    MotionProfile profile;    ///< Motion profile generator component
-    MotionDetector detector;  ///< Motion settle/stall detector component
-    SoftLimits limits;        ///< Soft position limits component
-
-    bool useFuzzy = false;  ///< True if using fuzzy PID controller
-
+    // State managed by facade
     float target = 0;                         ///< Target position in degrees
     std::atomic<bool> motionDone{true};       ///< True if motion is complete
     float lastPos = 0;                        ///< Last encoder position (deg)
+    float lastPidOut = 0.0f;                  ///< Last computed PID output (for status)
+    float lastVelDegPerSec = 0.0f;            ///< Last estimated angular velocity (deg/s)
+
+    // Thread safety
     SemaphoreHandle_t targetMutex = nullptr;  ///< Mutex protecting target
     SemaphoreHandle_t configMutex = nullptr;  ///< Mutex protecting config
 
-    TaskHandle_t taskHandle = nullptr;              ///< Optional background control task
-    uint32_t updateHz = 100;                        ///< Background control update rate (Hz)
-    volatile bool taskStopRequested = false;        ///< Flag to signal task to exit gracefully
-    SemaphoreHandle_t taskExitSemaphore = nullptr;  ///< Semaphore signaled when task exits
-
-    float lastPidOut = 0.0f;        ///< Last computed PID output (for status)
-    float lastVelDegPerSec = 0.0f;  ///< Last estimated angular velocity (deg/s)
-
-    uint64_t motionStartUs = 0;  ///< Motion start timestamp (us) for timeout guard
-
-    BaseType_t controlTaskCoreId = tskNO_AFFINITY;  ///< Core affinity for xTaskCreatePinnedToCore()
-    UBaseType_t controlTaskPriority = 10;           ///< FreeRTOS priority for the control task
-
-    bool notifyDriven = false;                    ///< If true, task waits on ulTaskNotifyTake()
-    TickType_t notifyBlockTicks = portMAX_DELAY;  ///< Max ticks to block waiting for notify
-
+    // Callbacks (facade manages these)
     MotionEventCallback onMotionDoneCb = nullptr;  ///< Motion done callback function
     void* onMotionDoneUser = nullptr;              ///< User data for motion done callback
     MotionEventCallback onStallCb = nullptr;       ///< Stall detection callback function
@@ -317,15 +317,9 @@ class MotorControl {
     MotionEventCallback onLimitHitCb = nullptr;    ///< Limit hit callback function
     void* onLimitHitUser = nullptr;                ///< User data for limit hit callback
 
-    uint64_t lastPidLogUs = 0;     ///< Timestamp (us) of last PID log output
+    // Logging timestamps
     uint64_t lastStateLogUs = 0;   ///< Timestamp (us) of last state log output
-    uint64_t lastCmdLogUs = 0;     ///< Timestamp (us) of last command log output
     uint64_t lastStatusLogUs = 0;  ///< Timestamp (us) of last status log output
-
-    float slewOutPct = 0.0f;   ///< Current slew-limited output (%)
-    uint64_t lastSlewUs = 0;   ///< Timestamp (us) of last slew rate update
-
-    mutable float clampPrevValue = NAN;  ///< Previous clamped value for log deduplication
 
     static constexpr const char* TAG = "MotorControl";  ///< Log tag
 
@@ -335,68 +329,23 @@ class MotorControl {
     void syncComponentsFromConfig();
 
     /**
-     * @brief Clamp a PID output signal to [-100, 100].
-     * @param signal Raw PID output signal (percent semantics)
-     * @return Clamped output in [-100, 100]
-     */
-    float clampToPercentRange(float signal) const;
-
-    /**
      * @brief Handle idle state when motion is done.
      */
     void handleIdleState(float currentTarget, float currentPos, uint64_t nowUs);
 
     /**
-     * @brief Check and handle motion timeout.
-     * @return True if timeout occurred and motion was stopped.
+     * @brief Handle motion event from monitor.
+     * @param event The motion event
+     * @param currentTarget Current target position
+     * @param currentPos Current position
      */
-    bool checkTimeout(const MotorControlConfig& cfg, uint64_t nowUs);
+    void handleMotionEvent(MotionEvent event, float currentTarget, float currentPos);
 
     /**
-     * @brief Compute control output from PID and feed-forward.
-     * @return Combined control signal in percent.
+     * @brief Get target value with thread safety.
+     * @return Current target position
      */
-    float computeControl(const MotorControlConfig& cfg, float currentTarget, float currentPos, uint64_t nowUs);
-
-    /**
-     * @brief Check and handle soft limit violations.
-     * @return True if at limit and motion was stopped.
-     */
-    bool checkLimits(float combined, float currentPos);
-
-    /**
-     * @brief Apply min/max speed limits and profile shaping.
-     * @return Profiled speed command.
-     */
-    float applySpeedLimits(const MotorControlConfig& cfg, float combined, float currentTarget,
-                           float currentPos, uint64_t nowUs);
-
-    /**
-     * @brief Check if PID controller reports settled.
-     * @return True if PID is settled.
-     */
-    bool checkPidSettled(const MotorControlConfig& cfg);
-
-    /**
-     * @brief Handle motion settled state.
-     */
-    void handleSettled();
-
-    /**
-     * @brief Handle stall condition.
-     */
-    void handleStall(const MotorControlConfig& cfg, float currentTarget, float currentPos);
-
-    /**
-     * @brief Apply slew-limited motor command.
-     */
-    void applyMotorCommand(const MotorControlConfig& cfg, float profiled, uint64_t nowUs);
-
-    /**
-     * @brief Static task entry point for FreeRTOS task.
-     * @param param Pointer to MotorControl instance
-     */
-    static void taskFunc(void* param);
+    float getTargetThreadSafe() const;
 };
 
 }  // namespace DC_Motor_Controller_Firmware::Control

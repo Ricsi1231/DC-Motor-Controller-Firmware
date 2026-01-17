@@ -7,9 +7,52 @@
 using namespace DC_Motor_Controller_Firmware;
 using namespace Control;
 
+static ControlLawConfig buildControlLawConfig(const MotorControlConfig& cfg) {
+    ControlLawConfig lawCfg;
+    lawCfg.minSpeed = cfg.minSpeed;
+    lawCfg.maxSpeed = cfg.maxSpeed;
+    lawCfg.minErrorToMove = cfg.minErrorToMove;
+    lawCfg.Kff_pos = cfg.Kff_pos;
+    lawCfg.Kff_vel = cfg.Kff_vel;
+    lawCfg.motionProfileEnabled = cfg.motionProfileEnabled;
+    lawCfg.profileType = cfg.motionProfileType;
+    lawCfg.accelLimitPctPerSec = cfg.accelLimitPctPerSec;
+    lawCfg.jerkLimitPctPerSec2 = cfg.jerkLimitPctPerSec2;
+    return lawCfg;
+}
+
+static MotionMonitorConfig buildMotionMonitorConfig(const MotorControlConfig& cfg) {
+    MotionMonitorConfig monCfg;
+    monCfg.minErrorToMove = cfg.minErrorToMove;
+    monCfg.stuckPositionEpsilon = cfg.stuckPositionEpsilon;
+    monCfg.stuckCountLimit = cfg.stuckCountLimit;
+    monCfg.pidWarmupLimit = cfg.pidWarmupLimit;
+    monCfg.settlePosTolDeg = cfg.settlePosTolDeg;
+    monCfg.settleVelTolDegPerSec = cfg.settleVelTolDegPerSec;
+    monCfg.settleCountLimit = cfg.settleCountLimit;
+    monCfg.motionTimeoutMs = cfg.motionTimeoutMs;
+    monCfg.driftDeadband = cfg.driftDeadband;
+    monCfg.driftHysteresis = cfg.driftHysteresis;
+    return monCfg;
+}
+
+static ActuatorConfig buildActuatorConfig(const MotorControlConfig& cfg) {
+    ActuatorConfig actCfg;
+    actCfg.slewRatePctPerSec = cfg.accelLimitPctPerSec;
+    actCfg.maxSpeed = cfg.maxSpeed;
+    return actCfg;
+}
+
 MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pidRef,
                            const MotorControlConfig& initialConfig)
-    : encoder(enc), motor(drv), pid(pidRef), fuzzy(PID::FuzzyPidConfig{}), config(initialConfig) {
+    : encoder(enc),
+      pid(pidRef),
+      fuzzy(PID::FuzzyPidConfig{}),
+      controlLaw(pidRef, buildControlLawConfig(initialConfig)),
+      motionMonitor(buildMotionMonitorConfig(initialConfig)),
+      actuator(drv, buildActuatorConfig(initialConfig)),
+      controlTask(),
+      config(initialConfig) {
     ESP_LOGI(TAG, "Ctor: creating mutexes");
     targetMutex = xSemaphoreCreateMutex();
     if (targetMutex == nullptr) {
@@ -21,10 +64,7 @@ MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PI
         ESP_LOGE(TAG, "Failed to create config mutex");
     }
 
-    taskExitSemaphore = xSemaphoreCreateBinary();
-    if (taskExitSemaphore == nullptr) {
-        ESP_LOGE(TAG, "Failed to create task exit semaphore");
-    }
+    controlTask.setUpdateCallback([this]() { this->update(); });
 
     syncComponentsFromConfig();
     ESP_LOGI(TAG, "Ctor done");
@@ -32,7 +72,14 @@ MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PI
 
 MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pidRef,
                            PID::FuzzyPIDController& fuzzyRef, const MotorControlConfig& cfg)
-    : encoder(enc), motor(drv), pid(pidRef), fuzzy(fuzzyRef), config(cfg) {
+    : encoder(enc),
+      pid(pidRef),
+      fuzzy(fuzzyRef),
+      controlLaw(pidRef, fuzzyRef, buildControlLawConfig(cfg)),
+      motionMonitor(buildMotionMonitorConfig(cfg)),
+      actuator(drv, buildActuatorConfig(cfg)),
+      controlTask(),
+      config(cfg) {
     ESP_LOGI(TAG, "Ctor: creating mutexes");
     targetMutex = xSemaphoreCreateMutex();
     if (targetMutex == nullptr) {
@@ -44,12 +91,10 @@ MotorControl::MotorControl(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PI
         ESP_LOGE(TAG, "Failed to create config mutex");
     }
 
-    taskExitSemaphore = xSemaphoreCreateBinary();
-    if (taskExitSemaphore == nullptr) {
-        ESP_LOGE(TAG, "Failed to create task exit semaphore");
-    }
-
     useFuzzy = true;
+
+    controlTask.setUpdateCallback([this]() { this->update(); });
+
     syncComponentsFromConfig();
     ESP_LOGI(TAG, "Ctor done");
 }
@@ -68,45 +113,28 @@ MotorControl::~MotorControl() {
         configMutex = nullptr;
         ESP_LOGI(TAG, "Deleted config mutex");
     }
-    if (taskExitSemaphore != nullptr) {
-        vSemaphoreDelete(taskExitSemaphore);
-        taskExitSemaphore = nullptr;
-        ESP_LOGI(TAG, "Deleted task exit semaphore");
-    }
     ESP_LOGI(TAG, "Dtor done");
 }
 
 MotorControl::MotorControl(MotorControl&& other) noexcept
     : encoder(other.encoder),
-      motor(other.motor),
       pid(other.pid),
       fuzzy(other.fuzzy),
-      config(other.config),
-      profile(other.profile),
-      detector(other.detector),
-      limits(other.limits) {
+      controlLaw(other.pid, buildControlLawConfig(other.config)),
+      motionMonitor(buildMotionMonitorConfig(other.config)),
+      actuator(other.actuator),
+      controlTask(),
+      config(other.config) {
     ESP_LOGI(TAG, "Move Ctor start");
     useFuzzy = other.useFuzzy;
     target = other.target;
     motionDone.store(other.motionDone.load(std::memory_order_relaxed), std::memory_order_relaxed);
     lastPos = other.lastPos;
-    updateHz = other.updateHz;
     lastPidOut = other.lastPidOut;
     lastVelDegPerSec = other.lastVelDegPerSec;
 
     targetMutex = other.targetMutex;
     configMutex = other.configMutex;
-    taskHandle = other.taskHandle;
-    taskStopRequested = other.taskStopRequested;
-    taskExitSemaphore = other.taskExitSemaphore;
-
-    motionStartUs = other.motionStartUs;
-
-    controlTaskCoreId = other.controlTaskCoreId;
-    controlTaskPriority = other.controlTaskPriority;
-
-    notifyDriven = other.notifyDriven;
-    notifyBlockTicks = other.notifyBlockTicks;
 
     onMotionDoneCb = other.onMotionDoneCb;
     onMotionDoneUser = other.onMotionDoneUser;
@@ -115,21 +143,12 @@ MotorControl::MotorControl(MotorControl&& other) noexcept
     onLimitHitCb = other.onLimitHitCb;
     onLimitHitUser = other.onLimitHitUser;
 
-    lastPidLogUs = other.lastPidLogUs;
     lastStateLogUs = other.lastStateLogUs;
-    lastCmdLogUs = other.lastCmdLogUs;
     lastStatusLogUs = other.lastStatusLogUs;
-    slewOutPct = other.slewOutPct;
-    lastSlewUs = other.lastSlewUs;
-    clampPrevValue = other.clampPrevValue;
 
     other.targetMutex = nullptr;
     other.configMutex = nullptr;
-    other.taskHandle = nullptr;
-    other.taskStopRequested = false;
-    other.taskExitSemaphore = nullptr;
     other.motionDone.store(true, std::memory_order_relaxed);
-    other.motionStartUs = 0;
 
     other.onMotionDoneCb = nullptr;
     other.onMotionDoneUser = nullptr;
@@ -138,37 +157,24 @@ MotorControl::MotorControl(MotorControl&& other) noexcept
     other.onLimitHitCb = nullptr;
     other.onLimitHitUser = nullptr;
 
-    other.lastPidLogUs = 0;
     other.lastStateLogUs = 0;
-    other.lastCmdLogUs = 0;
     other.lastStatusLogUs = 0;
-    other.slewOutPct = 0.0f;
-    other.lastSlewUs = 0;
-    other.clampPrevValue = NAN;
+
+    controlTask.setUpdateCallback([this]() { this->update(); });
 
     ESP_LOGI(TAG, "Move Ctor done");
 }
 
 void MotorControl::syncComponentsFromConfig() {
-    profile.configure(config.motionProfileType, config.accelLimitPctPerSec, config.jerkLimitPctPerSec2);
-    profile.setEnabled(config.motionProfileEnabled);
-    profile.setMaxSpeed(config.maxSpeed);
-
-    MotionDetector::Config detectorCfg;
-    detectorCfg.minErrorToMove = config.minErrorToMove;
-    detectorCfg.stuckPositionEpsilon = config.stuckPositionEpsilon;
-    detectorCfg.stuckCountLimit = config.stuckCountLimit;
-    detectorCfg.pidWarmupLimit = config.pidWarmupLimit;
-    detectorCfg.settlePosTolDeg = config.settlePosTolDeg;
-    detectorCfg.settleVelTolDegPerSec = config.settleVelTolDegPerSec;
-    detectorCfg.settleCountLimit = config.settleCountLimit;
-    detector.setConfig(detectorCfg);
+    controlLaw.setConfig(buildControlLawConfig(config));
+    motionMonitor.setConfig(buildMotionMonitorConfig(config));
+    actuator.setConfig(buildActuatorConfig(config));
 }
 
 void MotorControl::setTargetDegrees(float degrees) {
     ESP_LOGI(TAG, "setTargetDegrees: req=%.3f", degrees);
 
-    degrees = limits.clampTarget(degrees);
+    degrees = motionMonitor.clampTarget(degrees);
 
     if (targetMutex != nullptr && xSemaphoreTake(targetMutex, portMAX_DELAY) == pdTRUE) {
         target = degrees;
@@ -178,22 +184,19 @@ void MotorControl::setTargetDegrees(float degrees) {
         ESP_LOGW(TAG, "setTargetDegrees without mutex");
     }
 
-    if (useFuzzy) {
-        fuzzy.reset();
-    } else {
-        pid.reset();
-    }
+    controlLaw.reset();
 
     motionDone.store(false, std::memory_order_relaxed);
     lastPos = encoder.getPositionInDegrees();
-    detector.startMotion();
-    motionStartUs = static_cast<uint64_t>(esp_timer_get_time());
 
-    profile.reset();
+    uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
+    motionMonitor.startMotion(nowUs);
+
+    actuator.resetSlewState();
 
     ESP_LOGI(TAG, "Target set: tgt=%.3f, pos=%.3f", target, lastPos);
 
-    if (notifyDriven == true) {
+    if (controlTask.isNotifyDriven()) {
         BaseType_t higher = pdFALSE;
         notifyControlTaskFromISR(&higher);
         portYIELD_FROM_ISR();
@@ -214,132 +217,31 @@ void MotorControl::setTarget(float degrees) {
 }
 
 void MotorControl::startTask() {
-    if (taskHandle == nullptr) {
-        UBaseType_t priorityToUse = controlTaskPriority;
-        if (priorityToUse < 1) {
-            priorityToUse = 1;
-        }
-
-        BaseType_t coreToUse = controlTaskCoreId;
-        if (coreToUse != 0 && coreToUse != 1 && coreToUse != tskNO_AFFINITY) {
-            coreToUse = tskNO_AFFINITY;
-        }
-
-        ESP_LOGI(TAG, "Starting control task (core=%ld, prio=%u, mode=%s, stack=%u, hz=%u)",
-                 static_cast<long>(coreToUse), static_cast<unsigned>(priorityToUse),
-                 notifyDriven ? "notify" : "poll", 4096u, static_cast<unsigned>(updateHz));
-
-        BaseType_t res = xTaskCreatePinnedToCore(taskFunc, "MotorControlTask", 4096, this, priorityToUse,
-                                                 &taskHandle, coreToUse);
-
-        if (res != pdPASS) {
-            ESP_LOGE(TAG, "xTaskCreatePinnedToCore failed");
-            taskHandle = nullptr;
-        } else {
-            ESP_LOGI(TAG, "Control task started");
-        }
-    } else {
-        ESP_LOGW(TAG, "startTask: task already running");
-    }
+    controlTask.start();
 }
 
 void MotorControl::stopTask() {
-    if (taskHandle != nullptr) {
-        ESP_LOGI(TAG, "Requesting control task to stop");
-        taskStopRequested = true;
-
-        if (notifyDriven && taskHandle != nullptr) {
-            xTaskNotifyGive(taskHandle);
-        }
-
-        if (taskExitSemaphore != nullptr) {
-            BaseType_t taken = xSemaphoreTake(taskExitSemaphore, pdMS_TO_TICKS(2000));
-            if (taken != pdTRUE) {
-                ESP_LOGW(TAG, "Task did not exit in time, forcing delete");
-                vTaskDelete(taskHandle);
-            }
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            vTaskDelete(taskHandle);
-        }
-
-        taskHandle = nullptr;
-        taskStopRequested = false;
-        ESP_LOGI(TAG, "Control task stopped");
-    } else {
-        ESP_LOGW(TAG, "stopTask: no task");
-    }
+    controlTask.stop();
 }
 
 void MotorControl::stop() {
     ESP_LOGI(TAG, "Stop called");
-    motor.stop();
+    actuator.stop();
     motionDone.store(true, std::memory_order_relaxed);
-    motionStartUs = 0;
-    profile.reset();
-    detector.reset();
+    controlLaw.reset();
+    motionMonitor.reset();
 }
 
 void MotorControl::setUpdateHz(uint32_t hz) {
-    if (hz > 0) {
-        updateHz = hz;
-        ESP_LOGI(TAG, "UpdateHz set to %u", static_cast<unsigned>(hz));
-    } else {
-        ESP_LOGW(TAG, "Invalid UpdateHz %u", static_cast<unsigned>(hz));
-    }
-}
-
-void MotorControl::taskFunc(void* param) {
-    auto* self = static_cast<MotorControl*>(param);
-
-    TickType_t lastWake = xTaskGetTickCount();
-    uint32_t localHz = self->updateHz;
-    if (localHz == 0) {
-        localHz = 1;
-    }
-
-    TickType_t period = pdMS_TO_TICKS(1000 / localHz);
-    if (period < 1) {
-        period = 1;
-    }
-
-    ESP_LOGI(TAG, "Task loop start (mode=%s, periodTicks=%lu)", self->notifyDriven ? "notify" : "poll",
-             static_cast<unsigned long>(period));
-
-    while (!self->taskStopRequested) {
-        if (self->notifyDriven == true) {
-            uint32_t taken = ulTaskNotifyTake(pdTRUE, self->notifyBlockTicks);
-            if (taken == 0) {
-                continue;
-            }
-            if (self->taskStopRequested) {
-                break;
-            }
-            self->update();
-        } else {
-            self->update();
-            vTaskDelayUntil(&lastWake, period);
-        }
-    }
-
-    ESP_LOGI(TAG, "Task loop exiting");
-    if (self->taskExitSemaphore != nullptr) {
-        xSemaphoreGive(self->taskExitSemaphore);
-    }
-    vTaskDelete(nullptr);
+    controlTask.setUpdateHz(hz);
 }
 
 void MotorControl::setPID(float kp, float ki, float kd) {
-    pid.setParameters(kp, ki, kd);
-    ESP_LOGI(TAG, "PID set: Kp=%.4f Ki=%.4f Kd=%.4f", kp, ki, kd);
+    controlLaw.setPID(kp, ki, kd);
 }
 
 void MotorControl::getPID(float& kp, float& ki, float& kd) {
-    if (useFuzzy) {
-        fuzzy.getCurrentGains(kp, ki, kd);
-    } else {
-        pid.getParameters(kp, ki, kd);
-    }
+    controlLaw.getPID(kp, ki, kd);
 }
 
 void MotorControl::setConfig(const MotorControlConfig& newConfig) {
@@ -387,19 +289,12 @@ void MotorControl::setMotionTimeoutMs(uint32_t ms) {
         config.motionTimeoutMs = static_cast<int>(ms);
         ESP_LOGW(TAG, "setMotionTimeoutMs without mutex");
     }
+    motionMonitor.setMotionTimeoutMs(ms);
     ESP_LOGI(TAG, "Motion timeout set: %u ms", static_cast<unsigned>(ms));
 }
 
 uint32_t MotorControl::getMotionTimeoutMs() const {
-    uint32_t value = 0;
-    if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        value = static_cast<uint32_t>(config.motionTimeoutMs);
-        xSemaphoreGive(configMutex);
-    } else {
-        value = static_cast<uint32_t>(config.motionTimeoutMs);
-        ESP_LOGW(TAG, "getMotionTimeoutMs without mutex");
-    }
-    return value;
+    return motionMonitor.getMotionTimeoutMs();
 }
 
 void MotorControl::enableMotionProfile(bool enable) {
@@ -410,8 +305,7 @@ void MotorControl::enableMotionProfile(bool enable) {
         config.motionProfileEnabled = enable;
         ESP_LOGW(TAG, "enableMotionProfile without mutex");
     }
-    profile.setEnabled(enable);
-    ESP_LOGI(TAG, "Profile %s", enable ? "ENABLED" : "DISABLED");
+    controlLaw.enableMotionProfile(enable);
 }
 
 void MotorControl::configureMotionProfile(MotionProfileType type, float accelPctPerSec, float jerkPctPerSec2) {
@@ -426,9 +320,9 @@ void MotorControl::configureMotionProfile(MotionProfileType type, float accelPct
         config.jerkLimitPctPerSec2 = jerkPctPerSec2;
         ESP_LOGW(TAG, "configureMotionProfile without mutex");
     }
-    profile.configure(type, accelPctPerSec, jerkPctPerSec2);
-    ESP_LOGI(TAG, "Profile cfg: type=%s accel=%.1f jerk=%.1f",
-             type == MotionProfileType::TRAPEZOID ? "TRAP" : "S", accelPctPerSec, jerkPctPerSec2);
+    controlLaw.configureMotionProfile(type, accelPctPerSec, jerkPctPerSec2);
+
+    actuator.setSlewRate(accelPctPerSec);
 }
 
 void MotorControl::setFeedForward(float kpos, float kvel) {
@@ -441,19 +335,11 @@ void MotorControl::setFeedForward(float kpos, float kvel) {
         config.Kff_vel = kvel;
         ESP_LOGW(TAG, "setFeedForward without mutex");
     }
-    ESP_LOGI(TAG, "FF set: Kff_pos=%.4f Kff_vel=%.4f", kpos, kvel);
+    controlLaw.setFeedForward(kpos, kvel);
 }
 
 void MotorControl::getFeedForward(float& kpos, float& kvel) const {
-    if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        kpos = config.Kff_pos;
-        kvel = config.Kff_vel;
-        xSemaphoreGive(configMutex);
-    } else {
-        kpos = config.Kff_pos;
-        kvel = config.Kff_vel;
-        ESP_LOGW(TAG, "getFeedForward without mutex");
-    }
+    controlLaw.getFeedForward(kpos, kvel);
 }
 
 void MotorControl::setPidWarmupCycles(int cycles) {
@@ -467,58 +353,29 @@ void MotorControl::setPidWarmupCycles(int cycles) {
         config.pidWarmupLimit = cycles;
         ESP_LOGW(TAG, "setPidWarmupCycles without mutex");
     }
-
-    MotionDetector::Config detectorCfg;
-    detectorCfg.pidWarmupLimit = cycles;
-    detector.setConfig(detectorCfg);
-
-    ESP_LOGI(TAG, "PID warmup cycles=%d", cycles);
+    motionMonitor.setPidWarmupCycles(cycles);
 }
 
 int MotorControl::getPidWarmupCycles() const {
-    int value = 0;
-    if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        value = config.pidWarmupLimit;
-        xSemaphoreGive(configMutex);
-    } else {
-        value = config.pidWarmupLimit;
-        ESP_LOGW(TAG, "getPidWarmupCycles without mutex");
-    }
-    return value;
+    return motionMonitor.getPidWarmupCycles();
 }
 
 void MotorControl::configureControlTask(int coreId, UBaseType_t priority) {
-    if (priority < 1) {
-        priority = 1;
-    }
-
-    BaseType_t coreCandidate = static_cast<BaseType_t>(coreId);
-    if (coreCandidate != 0 && coreCandidate != 1 && coreCandidate != tskNO_AFFINITY) {
-        coreCandidate = tskNO_AFFINITY;
-    }
-
-    controlTaskPriority = priority;
-    controlTaskCoreId = coreCandidate;
-
-    ESP_LOGI(TAG, "Control task config: core=%ld priority=%u", static_cast<long>(controlTaskCoreId),
-             static_cast<unsigned>(controlTaskPriority));
+    controlTask.configureTask(coreId, priority);
 }
 
 int MotorControl::getControlTaskCore() const {
-    return static_cast<int>(controlTaskCoreId);
+    return controlTask.getCoreId();
 }
 
 UBaseType_t MotorControl::getControlTaskPriority() const {
-    return controlTaskPriority;
+    return controlTask.getPriority();
 }
 
 void MotorControl::enableNotifyDrivenUpdates(bool enable, TickType_t maxBlockTicks) {
-    notifyDriven = enable;
-    notifyBlockTicks = maxBlockTicks;
-    ESP_LOGI(TAG, "Notify-driven updates %s, blockTicks=%lu", notifyDriven ? "ENABLED" : "DISABLED",
-             static_cast<unsigned long>(notifyBlockTicks));
+    controlTask.enableNotifyDrivenUpdates(enable, maxBlockTicks);
 
-    if (notifyDriven == true && taskHandle != nullptr) {
+    if (enable && controlTask.isRunning()) {
         BaseType_t higher = pdFALSE;
         notifyControlTaskFromISR(&higher);
         portYIELD_FROM_ISR();
@@ -527,9 +384,7 @@ void MotorControl::enableNotifyDrivenUpdates(bool enable, TickType_t maxBlockTic
 }
 
 void MotorControl::notifyControlTaskFromISR(BaseType_t* higherPrioTaskWoken) {
-    if (taskHandle != nullptr) {
-        vTaskNotifyGiveFromISR(taskHandle, higherPrioTaskWoken);
-    }
+    controlTask.notifyFromISR(higherPrioTaskWoken);
 }
 
 void MotorControl::setOnMotionDone(MotionEventCallback cb, void* user) {
@@ -554,35 +409,19 @@ bool MotorControl::isMotionDone() const {
     return motionDone.load(std::memory_order_relaxed);
 }
 
-float MotorControl::clampToPercentRange(float signal) const {
-    float clampedValue = signal;
-
-    if (!std::isfinite(clampedValue)) {
-        if (clampedValue != clampPrevValue) {
-            ESP_LOGW(TAG, "clamp: non-finite signal -> 0");
-        }
-        clampPrevValue = 0.0f;
-        return 0.0f;
+float MotorControl::getTargetThreadSafe() const {
+    float currentTarget;
+    if (targetMutex == nullptr) {
+        ESP_LOGE(TAG, "update: target mutex is null, using cached value");
+        currentTarget = target;
+    } else if (xSemaphoreTake(targetMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        currentTarget = target;
+        xSemaphoreGive(targetMutex);
+    } else {
+        ESP_LOGW(TAG, "update: target mutex timeout, using cached value");
+        currentTarget = target;
     }
-
-    if (clampedValue > 100.0f) {
-        if (clampPrevValue != 100.0f) {
-            ESP_LOGW(TAG, "clamp: %.3f -> 100.0", clampedValue);
-        }
-        clampPrevValue = 100.0f;
-        return 100.0f;
-    }
-
-    if (clampedValue < -100.0f) {
-        if (clampPrevValue != -100.0f) {
-            ESP_LOGW(TAG, "clamp: %.3f -> -100.0", clampedValue);
-        }
-        clampPrevValue = -100.0f;
-        return -100.0f;
-    }
-
-    clampPrevValue = clampedValue;
-    return clampedValue;
+    return currentTarget;
 }
 
 void MotorControl::update() {
@@ -596,19 +435,9 @@ void MotorControl::update() {
         return false;
     };
 
-    float currentTarget;
-    if (targetMutex == nullptr) {
-        ESP_LOGE(TAG, "update: target mutex is null, using cached value");
-        currentTarget = target;
-    } else if (xSemaphoreTake(targetMutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        currentTarget = target;
-        xSemaphoreGive(targetMutex);
-    } else {
-        ESP_LOGW(TAG, "update: target mutex timeout, using cached value");
-        currentTarget = target;
-    }
-
+    float currentTarget = getTargetThreadSafe();
     float currentPos = encoder.getPositionInDegrees();
+
     if (shouldLog(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "update: t=%llu us, tgt=%.3f pos=%.3f", (unsigned long long)nowUs, currentTarget,
                  currentPos);
@@ -619,39 +448,31 @@ void MotorControl::update() {
         return;
     }
 
-    MotorControlConfig cfg = getConfig();
-
-    if (checkTimeout(cfg, nowUs)) {
-        return;
-    }
-
-    float combined = computeControl(cfg, currentTarget, currentPos, nowUs);
-
-    if (checkLimits(combined, currentPos)) {
-        return;
-    }
-
-    float profiled = applySpeedLimits(cfg, combined, currentTarget, currentPos, nowUs);
-
     float dpos = currentPos - lastPos;
-    float vel = dpos * static_cast<float>(updateHz);
-    lastVelDegPerSec = vel;
+    float velocity = dpos * static_cast<float>(controlTask.getUpdateHz());
+    lastVelDegPerSec = velocity;
 
-    detector.update(currentTarget - currentPos, vel, dpos);
+    ControlOutput ctrl = controlLaw.compute(currentTarget, currentPos, velocity, nowUs);
+    lastPidOut = ctrl.rawPidOutput;
 
-    if (detector.isSettled()) {
-        handleSettled();
+    MotionObservation obs{};
+    obs.error = currentTarget - currentPos;
+    obs.velocity = velocity;
+    obs.deltaPosition = dpos;
+    obs.position = currentPos;
+    obs.commandPct = ctrl.commandPct;
+    obs.nowUs = nowUs;
+    obs.pidSettled = ctrl.settled;
+
+    MotionEvent event = motionMonitor.evaluate(obs);
+
+    if (event != MotionEvent::NONE) {
+        handleMotionEvent(event, currentTarget, currentPos);
         lastPos = currentPos;
         return;
     }
 
-    if (detector.isStuck() || checkPidSettled(cfg)) {
-        handleStall(cfg, currentTarget, currentPos);
-        lastPos = currentPos;
-        return;
-    }
-
-    applyMotorCommand(cfg, profiled, nowUs);
+    actuator.drive(ctrl.commandPct, nowUs);
     lastPos = currentPos;
 
     if (shouldLog(lastStatusLogUs, nowUs, 1000)) {
@@ -661,193 +482,65 @@ void MotorControl::update() {
 }
 
 void MotorControl::handleIdleState(float currentTarget, float currentPos, uint64_t nowUs) {
-    MotorControlConfig cfg = getConfig();
-    float drift = currentTarget - currentPos;
-    float wakeTh = cfg.driftDeadband + cfg.driftHysteresis;
-    if (wakeTh < 0.0f) {
-        wakeTh = 0.0f;
-    }
-
-    if (fabsf(drift) > wakeTh) {
+    if (motionMonitor.shouldWakeFromIdle(currentTarget, currentPos)) {
         setTargetDegrees(currentTarget);
     }
 }
 
-bool MotorControl::checkTimeout(const MotorControlConfig& cfg, uint64_t nowUs) {
-    if (cfg.motionTimeoutMs <= 0) {
-        return false;
-    }
+void MotorControl::handleMotionEvent(MotionEvent event, float currentTarget, float currentPos) {
+    actuator.stop();
 
-    if (motionStartUs == 0) {
-        motionStartUs = nowUs;
-    }
+    switch (event) {
+        case MotionEvent::SETTLED:
+            ESP_LOGI(TAG, "motion DONE: settled");
+            motionDone.store(true, std::memory_order_relaxed);
+            if (onMotionDoneCb) {
+                MotorStatus s = getStatus();
+                onMotionDoneCb(s, onMotionDoneUser);
+            }
+            break;
 
-    uint64_t elapsedUs = nowUs - motionStartUs;
-    uint64_t limitUs = static_cast<uint64_t>(cfg.motionTimeoutMs) * 1000ULL;
-
-    if (elapsedUs > limitUs) {
-        ESP_LOGW(TAG, "timeout: %llu ms > %u ms", (unsigned long long)(elapsedUs / 1000ULL),
-                 static_cast<unsigned int>(cfg.motionTimeoutMs));
-        motor.stop();
-        motionDone.store(true, std::memory_order_relaxed);
-        if (onStallCb) {
-            MotorStatus s = getStatus();
-            onStallCb(s, onStallUser);
+        case MotionEvent::STALLED: {
+            float finalError = currentTarget - currentPos;
+            bool doneOk = motionMonitor.isWithinDriftDeadband(finalError);
+            motionDone.store(doneOk, std::memory_order_relaxed);
+            if (onStallCb) {
+                MotorStatus s = getStatus();
+                onStallCb(s, onStallUser);
+            }
+            break;
         }
-        motionStartUs = 0;
-        profile.reset();
-        detector.reset();
-        return true;
-    }
-    return false;
-}
 
-float MotorControl::computeControl(const MotorControlConfig& cfg, float currentTarget, float currentPos,
-                                   uint64_t nowUs) {
-    float pidSignal = 0;
-    if (useFuzzy) {
-        pidSignal = fuzzy.compute(currentTarget, currentPos);
-    } else {
-        pidSignal = pid.compute(currentTarget, currentPos);
-    }
-    pidSignal = clampToPercentRange(pidSignal);
-    lastPidOut = pidSignal;
+        case MotionEvent::TIMEOUT:
+            ESP_LOGW(TAG, "motion timeout");
+            motionDone.store(true, std::memory_order_relaxed);
+            if (onStallCb) {
+                MotorStatus s = getStatus();
+                onStallCb(s, onStallUser);
+            }
+            break;
 
-    float refVelPct = profile.isEnabled() ? 0.0f : pidSignal;
-    float ff = cfg.Kff_pos * currentTarget + cfg.Kff_vel * refVelPct;
+        case MotionEvent::LIMIT_HIT:
+            ESP_LOGW(TAG, "limit hit at %.3f deg", currentPos);
+            motionDone.store(true, std::memory_order_relaxed);
+            if (onLimitHitCb) {
+                MotorStatus s = getStatus();
+                onLimitHitCb(s, onLimitHitUser);
+            }
+            break;
 
-    return clampToPercentRange(pidSignal + ff);
-}
-
-bool MotorControl::checkLimits(float combined, float currentPos) {
-    if (!limits.isEnforced()) {
-        return false;
+        case MotionEvent::NONE:
+            break;
     }
 
-    if (limits.isAtLimit(currentPos, combined)) {
-        ESP_LOGW(TAG, "limit: at %.3f, stopping", currentPos);
-        motor.stop();
-        motionDone.store(true, std::memory_order_relaxed);
-        if (onLimitHitCb) {
-            MotorStatus s = getStatus();
-            onLimitHitCb(s, onLimitHitUser);
-        }
-        profile.reset();
-        detector.reset();
-        return true;
-    }
-    return false;
-}
-
-float MotorControl::applySpeedLimits(const MotorControlConfig& cfg, float combined, float currentTarget,
-                                     float currentPos, uint64_t nowUs) {
-    float errAbs = fabsf(currentTarget - currentPos);
-    float mag = fabsf(combined);
-
-    if (mag < cfg.minSpeed && errAbs > cfg.minErrorToMove) {
-        mag = cfg.minSpeed;
-    }
-    if (mag > cfg.maxSpeed) {
-        mag = cfg.maxSpeed;
-    }
-
-    float signedDesired = (combined >= 0.0f) ? mag : -mag;
-    return profile.shape(signedDesired, nowUs);
-}
-
-bool MotorControl::checkPidSettled(const MotorControlConfig& cfg) {
-    if (useFuzzy) {
-        return fuzzy.isSettled();
-    }
-    return pid.isSettled();
-}
-
-void MotorControl::handleSettled() {
-    ESP_LOGI(TAG, "motion DONE: settled");
-    motor.stop();
-    motionDone.store(true, std::memory_order_relaxed);
-    if (onMotionDoneCb) {
-        MotorStatus s = getStatus();
-        onMotionDoneCb(s, onMotionDoneUser);
-    }
-    motionStartUs = 0;
-    profile.reset();
-    detector.reset();
-}
-
-void MotorControl::handleStall(const MotorControlConfig& cfg, float currentTarget, float currentPos) {
-    motor.stop();
-    float finalDriftAbs = fabsf(currentTarget - currentPos);
-    bool doneOk = (finalDriftAbs <= cfg.driftDeadband);
-    motionDone.store(doneOk, std::memory_order_relaxed);
-    if (onStallCb) {
-        MotorStatus s = getStatus();
-        onStallCb(s, onStallUser);
-    }
-    motionStartUs = 0;
-    profile.reset();
-    detector.reset();
-}
-
-void MotorControl::applyMotorCommand(const MotorControlConfig& cfg, float profiled, uint64_t nowUs) {
-    if (lastSlewUs == 0) {
-        lastSlewUs = nowUs;
-        slewOutPct = 0.0f;
-    }
-
-    double dt = static_cast<double>(nowUs - lastSlewUs) / 1e6;
-    if (dt < 0.0) {
-        dt = 0.0;
-    }
-
-    double maxDelta = static_cast<double>(cfg.accelLimitPctPerSec) * dt;
-    double reqDelta = static_cast<double>(profiled) - static_cast<double>(slewOutPct);
-
-    if (reqDelta > maxDelta) {
-        reqDelta = maxDelta;
-    }
-    if (reqDelta < -maxDelta) {
-        reqDelta = -maxDelta;
-    }
-
-    float slewOut = static_cast<float>(static_cast<double>(slewOutPct) + reqDelta);
-    slewOutPct = slewOut;
-    lastSlewUs = nowUs;
-
-    float speedPct = fabsf(slewOut);
-    if (speedPct > cfg.maxSpeed) {
-        speedPct = cfg.maxSpeed;
-    }
-
-    DRV8876::Direction dir = (slewOut >= 0.0f) ? DRV8876::Direction::RIGHT : DRV8876::Direction::LEFT;
-    motor.setDirection(dir);
-    motor.setSpeed(speedPct);
-
-    auto shouldLog = [](uint64_t& lastLog, uint64_t now, uint32_t intervalMs) {
-        if (now - lastLog >= static_cast<uint64_t>(intervalMs) * 1000ULL) {
-            lastLog = now;
-            return true;
-        }
-        return false;
-    };
-
-    if (shouldLog(lastCmdLogUs, nowUs, 250)) {
-        const char* dirStr = (slewOut >= 0.0f) ? "RIGHT" : "LEFT";
-        ESP_LOGI(TAG, "cmd: dir=%s speed=%.2f%%", dirStr, speedPct);
-    }
+    controlLaw.reset();
+    motionMonitor.reset();
 }
 
 MotorStatus MotorControl::getStatus() const {
     MotorStatus status{};
 
-    float currentTarget;
-    if (targetMutex != nullptr && xSemaphoreTake(targetMutex, portMAX_DELAY) == pdTRUE) {
-        currentTarget = target;
-        xSemaphoreGive(targetMutex);
-    } else {
-        currentTarget = target;
-    }
-
+    float currentTarget = getTargetThreadSafe();
     float currentPos = encoder.getPositionInDegrees();
 
     status.target = currentTarget;
@@ -855,7 +548,7 @@ MotorStatus MotorControl::getStatus() const {
     status.error = currentTarget - currentPos;
     status.velocity = lastVelDegPerSec;
     status.pidOutput = lastPidOut;
-    status.stuckCount = detector.getStuckCount();
+    status.stuckCount = motionMonitor.getStuckCount();
     status.motionDone = motionDone.load(std::memory_order_relaxed);
     return status;
 }
@@ -872,16 +565,17 @@ void MotorControl::logMotorStatus(const MotorStatus& status) {
 void MotorControl::setSoftLimits(float minDeg, float maxDeg, bool enforce) {
     ESP_LOGI(TAG, "setSoftLimits: req[%.3f, %.3f], enforce=%d", minDeg, maxDeg, static_cast<int>(enforce));
 
-    limits.set(minDeg, maxDeg, enforce);
+    motionMonitor.setSoftLimits(minDeg, maxDeg, enforce);
 
-    if (limits.isEnforced()) {
-        float clamped = limits.clampTarget(target);
+    if (motionMonitor.areSoftLimitsEnforced()) {
+        float clamped = motionMonitor.clampTarget(target);
         if (fabsf(clamped - target) > 1e-6f) {
             ESP_LOGW(TAG, "Target clamped to %.3f due to soft limits", clamped);
             setTargetDegrees(clamped);
         }
     }
 
-    ESP_LOGI(TAG, "Soft limits set: [%.3f°, %.3f°], %s", limits.getMin(), limits.getMax(),
-             limits.isEnforced() ? "ENFORCED" : "NOT ENFORCED");
+    ESP_LOGI(TAG, "Soft limits set: [%.3f°, %.3f°], %s",
+             motionMonitor.getSoftLimitMin(), motionMonitor.getSoftLimitMax(),
+             motionMonitor.areSoftLimitsEnforced() ? "ENFORCED" : "NOT ENFORCED");
 }
