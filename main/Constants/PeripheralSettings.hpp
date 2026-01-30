@@ -49,8 +49,8 @@ EncoderConfig encoderConfig = {
 
 PidConfig defaultConfig = {
     .kp = 1.0f,
-    .ki = 0.04f,
-    .kd = 0.02f,
+    .ki = 0.1f,
+    .kd = 0.08f,
     .maxOutput = 100.0f,
     .maxIntegral = 300.0f,
     .errorEpsilon = 0.1f,
@@ -63,8 +63,9 @@ MotorControllerConfig motorCfg = {
     .minSpeed = 2.0f,
     .maxSpeed = 100.0f,
     .minErrorToMove = 0.2f,
-    .driftThreshold = 1.0f,
-    .stuckPositionEpsilon = 0.05f,
-    .stuckCountLimit = 50,
-    .pidWarmupLimit = 10,
+    .countsPerRevolution = 1024,
+    .stall = {.stuckPositionEpsilon = 0.05f,
+              .stuckCountLimit = 50,
+              .pidWarmupLimit = 10,
+              .minErrorToMove = 0.2f},
 };

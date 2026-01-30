@@ -57,6 +57,7 @@ float PIDController::compute(float setpoint, float measured) {
 
     if (fabsf(error) < config.errorEpsilon) {
         error = 0.0f;
+        integral = 0.0f;
         settled = true;
     } else {
         settled = false;

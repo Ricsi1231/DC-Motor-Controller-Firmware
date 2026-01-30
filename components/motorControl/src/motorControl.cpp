@@ -41,13 +41,14 @@ MotorController::~MotorController() {
 }
 
 MotorController::MotorController(MotorController&& other) noexcept
-    : encoder(other.encoder), motor(other.motor), pid(other.pid), config(other.config) {
+    : encoder(other.encoder), motor(other.motor), pid(other.pid), config(other.config),
+      profiler(other.profiler), settleDetector(other.settleDetector),
+      stallDetector(other.stallDetector), softLimiter(other.softLimiter),
+      motionGuard(other.motionGuard) {
     ESP_LOGI(TAG, "Move Ctor start");
     target = other.target;
     motionDone.store(other.motionDone.load(std::memory_order_relaxed), std::memory_order_relaxed);
     lastPos = other.lastPos;
-    stuckCounter = other.stuckCounter;
-    pidWarmupCounter = other.pidWarmupCounter;
     updateHz = other.updateHz;
     lastPidOut = other.lastPidOut;
     lastVelDegPerSec = other.lastVelDegPerSec;
@@ -55,14 +56,6 @@ MotorController::MotorController(MotorController&& other) noexcept
     targetMutex = other.targetMutex;
     configMutex = other.configMutex;
     taskHandle = other.taskHandle;
-
-    motionStartUs = other.motionStartUs;
-
-    profSpeedPercent = other.profSpeedPercent;
-    profAccelPctPerSec = other.profAccelPctPerSec;
-    lastProfileUs = other.lastProfileUs;
-
-    settleCounter = other.settleCounter;
 
     controlTaskCoreId = other.controlTaskCoreId;
     controlTaskPriority = other.controlTaskPriority;
@@ -81,11 +74,6 @@ MotorController::MotorController(MotorController&& other) noexcept
     other.configMutex = nullptr;
     other.taskHandle = nullptr;
     other.motionDone.store(true, std::memory_order_relaxed);
-    other.motionStartUs = 0;
-    other.profSpeedPercent = 0.0f;
-    other.profAccelPctPerSec = 0.0f;
-    other.lastProfileUs = 0;
-    other.settleCounter = 0;
 
     other.onMotionDoneCb = nullptr;
     other.onMotionDoneUser = nullptr;
@@ -97,25 +85,17 @@ MotorController::MotorController(MotorController&& other) noexcept
     ESP_LOGI(TAG, "Move Ctor done");
 }
 
+void MotorController::resetMotionState(uint64_t nowUs) {
+    profiler.reset(nowUs);
+    settleDetector.reset();
+    stallDetector.reset();
+    motionGuard.reset();
+}
+
 void MotorController::setTargetDegrees(float degrees) {
     ESP_LOGI(TAG, "setTargetDegrees: req=%.3f", degrees);
 
-    if (softLimitsEnforced == true) {
-        if (softMinDeg > softMaxDeg) {
-            float swapTmp = softMinDeg;
-            softMinDeg = softMaxDeg;
-            softMaxDeg = swapTmp;
-            ESP_LOGW(TAG, "Soft limits swapped (min>max)");
-        }
-        if (degrees < softMinDeg) {
-            ESP_LOGW(TAG, "Target below softMin (%.3f < %.3f), clamping", degrees, softMinDeg);
-            degrees = softMinDeg;
-        }
-        if (degrees > softMaxDeg) {
-            ESP_LOGW(TAG, "Target above softMax (%.3f > %.3f), clamping", degrees, softMaxDeg);
-            degrees = softMaxDeg;
-        }
-    }
+    degrees = softLimiter.clampTarget(degrees);
 
     if (targetMutex != nullptr && xSemaphoreTake(targetMutex, portMAX_DELAY) == pdTRUE) {
         target = degrees;
@@ -127,16 +107,12 @@ void MotorController::setTargetDegrees(float degrees) {
 
     pid.reset();
 
+    uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
+
     motionDone.store(false, std::memory_order_relaxed);
     lastPos = encoder.getPositionInDegrees();
-    stuckCounter = 0;
-    pidWarmupCounter = 0;
-    settleCounter = 0;
-    motionStartUs = static_cast<uint64_t>(esp_timer_get_time());
-
-    profSpeedPercent = 0.0f;
-    profAccelPctPerSec = 0.0f;
-    lastProfileUs = motionStartUs;
+    resetMotionState(nowUs);
+    motionGuard.startMotion(nowUs);
 
     ESP_LOGI(TAG, "Target set: tgt=%.3f, pos=%.3f", target, lastPos);
 
@@ -200,11 +176,7 @@ void MotorController::stop() {
     ESP_LOGI(TAG, "Stop called");
     motor.stop();
     motionDone.store(true, std::memory_order_relaxed);
-    motionStartUs = 0;
-    profSpeedPercent = 0.0f;
-    profAccelPctPerSec = 0.0f;
-    lastProfileUs = 0;
-    settleCounter = 0;
+    resetMotionState(0);
 }
 
 void MotorController::setUpdateHz(uint32_t hz) {
@@ -264,13 +236,19 @@ void MotorController::setConfig(const MotorControllerConfig& newConfig) {
     }
 
     ESP_LOGI(TAG,
-             "cfg: minSpd=%.1f maxSpd=%.1f minErr=%.3f driftDead=%.3f hyst=%.3f stuckEps=%.3f stuckN=%d pidWarmupN=%d "
-             "CPR=%d timeoutMs=%d profile=%s type=%s accel=%.1f jerk=%.1f Kff_pos=%.3f Kff_vel=%.3f "
-             "settlePos=%.3f settleVel=%.3f settleN=%d",
-             config.minSpeed, config.maxSpeed, config.minErrorToMove, config.driftDeadband, config.driftHysteresis, config.stuckPositionEpsilon,
-             config.stuckCountLimit, config.pidWarmupLimit, config.countsPerRevolution, config.motionTimeoutMs, config.motionProfileEnabled ? "ON" : "OFF",
-             (config.motionProfileType == MotionProfileType::TRAPEZOID ? "TRAP" : "S"), config.accelLimitPctPerSec, config.jerkLimitPctPerSec2, config.Kff_pos,
-             config.Kff_vel, config.settlePosTolDeg, config.settleVelTolDegPerSec, config.settleCountLimit);
+             "cfg: minSpd=%.1f maxSpd=%.1f minErr=%.3f CPR=%d "
+             "profile=%s type=%s accel=%.1f jerk=%.1f Kff_pos=%.3f Kff_vel=%.3f "
+             "settlePos=%.3f settleVel=%.3f settleN=%d "
+             "stuckEps=%.3f stuckN=%d pidWarmupN=%d "
+             "timeoutMs=%d driftDead=%.3f hyst=%.3f",
+             config.minSpeed, config.maxSpeed, config.minErrorToMove, config.countsPerRevolution,
+             config.profiler.enabled ? "ON" : "OFF",
+             (config.profiler.type == MotionProfileType::TRAPEZOID ? "TRAP" : "S"),
+             config.profiler.accelLimitPctPerSec, config.profiler.jerkLimitPctPerSec2,
+             config.Kff_pos, config.Kff_vel,
+             config.settle.posTolDeg, config.settle.velTolDegPerSec, config.settle.countLimit,
+             config.stall.stuckPositionEpsilon, config.stall.stuckCountLimit, config.stall.pidWarmupLimit,
+             config.guard.motionTimeoutMs, config.guard.driftDeadband, config.guard.driftHysteresis);
 }
 
 MotorControllerConfig MotorController::getConfig() const {
@@ -287,10 +265,10 @@ MotorControllerConfig MotorController::getConfig() const {
 
 void MotorController::setMotionTimeoutMs(uint32_t ms) {
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        config.motionTimeoutMs = static_cast<int>(ms);
+        config.guard.motionTimeoutMs = static_cast<int>(ms);
         xSemaphoreGive(configMutex);
     } else {
-        config.motionTimeoutMs = static_cast<int>(ms);
+        config.guard.motionTimeoutMs = static_cast<int>(ms);
         ESP_LOGW(TAG, "setMotionTimeoutMs without mutex");
     }
     ESP_LOGI(TAG, "Motion timeout set: %u ms", static_cast<unsigned>(ms));
@@ -299,10 +277,10 @@ void MotorController::setMotionTimeoutMs(uint32_t ms) {
 uint32_t MotorController::getMotionTimeoutMs() const {
     uint32_t value = 0;
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        value = static_cast<uint32_t>(config.motionTimeoutMs);
+        value = static_cast<uint32_t>(config.guard.motionTimeoutMs);
         xSemaphoreGive(configMutex);
     } else {
-        value = static_cast<uint32_t>(config.motionTimeoutMs);
+        value = static_cast<uint32_t>(config.guard.motionTimeoutMs);
         ESP_LOGW(TAG, "getMotionTimeoutMs without mutex");
     }
     return value;
@@ -310,25 +288,25 @@ uint32_t MotorController::getMotionTimeoutMs() const {
 
 void MotorController::enableMotionProfile(bool enable) {
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        config.motionProfileEnabled = enable ? true : false;
+        config.profiler.enabled = enable;
         xSemaphoreGive(configMutex);
     } else {
-        config.motionProfileEnabled = enable ? true : false;
+        config.profiler.enabled = enable;
         ESP_LOGW(TAG, "enableMotionProfile without mutex");
     }
-    ESP_LOGI(TAG, "Profile %s", config.motionProfileEnabled ? "ENABLED" : "DISABLED");
+    ESP_LOGI(TAG, "Profile %s", config.profiler.enabled ? "ENABLED" : "DISABLED");
 }
 
 void MotorController::configureMotionProfile(MotionProfileType type, float accelPctPerSec, float jerkPctPerSec2) {
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        config.motionProfileType = type;
-        config.accelLimitPctPerSec = accelPctPerSec;
-        config.jerkLimitPctPerSec2 = jerkPctPerSec2;
+        config.profiler.type = type;
+        config.profiler.accelLimitPctPerSec = accelPctPerSec;
+        config.profiler.jerkLimitPctPerSec2 = jerkPctPerSec2;
         xSemaphoreGive(configMutex);
     } else {
-        config.motionProfileType = type;
-        config.accelLimitPctPerSec = accelPctPerSec;
-        config.jerkLimitPctPerSec2 = jerkPctPerSec2;
+        config.profiler.type = type;
+        config.profiler.accelLimitPctPerSec = accelPctPerSec;
+        config.profiler.jerkLimitPctPerSec2 = jerkPctPerSec2;
         ESP_LOGW(TAG, "configureMotionProfile without mutex");
     }
     ESP_LOGI(TAG, "Profile cfg: type=%s accel=%.1f jerk=%.1f", type == MotionProfileType::TRAPEZOID ? "TRAP" : "S", accelPctPerSec, jerkPctPerSec2);
@@ -364,23 +342,23 @@ void MotorController::setPidWarmupCycles(int cycles) {
         cycles = 0;
     }
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        config.pidWarmupLimit = cycles;
+        config.stall.pidWarmupLimit = cycles;
         xSemaphoreGive(configMutex);
     } else {
-        config.pidWarmupLimit = cycles;
+        config.stall.pidWarmupLimit = cycles;
         ESP_LOGW(TAG, "setPidWarmupCycles without mutex");
     }
-    pidWarmupCounter = 0;
+    stallDetector.reset();
     ESP_LOGI(TAG, "PID warmup cycles=%d", cycles);
 }
 
 int MotorController::getPidWarmupCycles() const {
     int value = 0;
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
-        value = config.pidWarmupLimit;
+        value = config.stall.pidWarmupLimit;
         xSemaphoreGive(configMutex);
     } else {
-        value = config.pidWarmupLimit;
+        value = config.stall.pidWarmupLimit;
         ESP_LOGW(TAG, "getPidWarmupCycles without mutex");
     }
     return value;
@@ -407,7 +385,7 @@ int MotorController::getControlTaskCore() const { return static_cast<int>(contro
 UBaseType_t MotorController::getControlTaskPriority() const { return controlTaskPriority; }
 
 void MotorController::enableNotifyDrivenUpdates(bool enable, TickType_t maxBlockTicks) {
-    notifyDriven = enable ? true : false;
+    notifyDriven = enable;
     notifyBlockTicks = maxBlockTicks;
     ESP_LOGI(TAG, "Notify-driven updates %s, blockTicks=%lu", notifyDriven ? "ENABLED" : "DISABLED", static_cast<unsigned long>(notifyBlockTicks));
 
@@ -470,101 +448,11 @@ float MotorController::clampToPercentRange(float signal) const {
     return clampedValue;
 }
 
-float MotorController::shapeSpeedWithProfile(float desiredSigned, uint64_t nowUs) {
-    MotorControllerConfig configSnapshot = getConfig();
-
-    if (configSnapshot.motionProfileEnabled == false) {
-        profSpeedPercent = desiredSigned;
-        lastProfileUs = nowUs;
-        ESP_LOGD(TAG, "profile: OFF desired=%.2f -> prof=%.2f", desiredSigned, profSpeedPercent);
-        return profSpeedPercent;
-    }
-
-    if (lastProfileUs == 0) {
-        lastProfileUs = nowUs;
-    }
-
-    double timeStepSec = static_cast<double>(nowUs - lastProfileUs) / 1e6;
-    if (timeStepSec < 0.0) {
-        timeStepSec = 0.0;
-    }
-
-    float desiredClamped = desiredSigned;
-    if (desiredClamped > configSnapshot.maxSpeed) {
-        desiredClamped = configSnapshot.maxSpeed;
-    }
-    if (desiredClamped < -configSnapshot.maxSpeed) {
-        desiredClamped = -configSnapshot.maxSpeed;
-    }
-
-    if (configSnapshot.motionProfileType == MotionProfileType::TRAPEZOID) {
-        double maxDelta = static_cast<double>(configSnapshot.accelLimitPctPerSec) * timeStepSec;
-        double delta = static_cast<double>(desiredClamped) - static_cast<double>(profSpeedPercent);
-
-        if (delta > maxDelta) {
-            delta = maxDelta;
-        }
-        if (delta < -maxDelta) {
-            delta = -maxDelta;
-        }
-
-        profSpeedPercent = static_cast<float>(static_cast<double>(profSpeedPercent) + delta);
-        ESP_LOGD(TAG, "profile TRAP: dt=%.4f des=%.2f maxΔ=%.2f -> prof=%.2f", timeStepSec, desiredClamped, maxDelta, profSpeedPercent);
-    } else {
-        double speedErr = static_cast<double>(desiredClamped) - static_cast<double>(profSpeedPercent);
-        double accelTarget = 0.0;
-
-        if (timeStepSec > 0.0) {
-            accelTarget = speedErr / timeStepSec;
-        }
-
-        double accelCap = static_cast<double>(configSnapshot.accelLimitPctPerSec);
-        if (accelTarget > accelCap) {
-            accelTarget = accelCap;
-        }
-        if (accelTarget < -accelCap) {
-            accelTarget = -accelCap;
-        }
-
-        double jerkCap = static_cast<double>(configSnapshot.jerkLimitPctPerSec2);
-        double accelStepCap = jerkCap * timeStepSec;
-        double accelStep = accelTarget - static_cast<double>(profAccelPctPerSec);
-
-        if (accelStep > accelStepCap) {
-            accelStep = accelStepCap;
-        }
-        if (accelStep < -accelStepCap) {
-            accelStep = -accelStepCap;
-        }
-
-        profAccelPctPerSec = static_cast<float>(static_cast<double>(profAccelPctPerSec) + accelStep);
-
-        double newSpeed = static_cast<double>(profSpeedPercent) + static_cast<double>(profAccelPctPerSec) * timeStepSec;
-
-        if ((desiredClamped - profSpeedPercent) > 0.0f && newSpeed > static_cast<double>(desiredClamped)) {
-            newSpeed = static_cast<double>(desiredClamped);
-            profAccelPctPerSec = 0.0f;
-        }
-        if ((desiredClamped - profSpeedPercent) < 0.0f && newSpeed < static_cast<double>(desiredClamped)) {
-            newSpeed = static_cast<double>(desiredClamped);
-            profAccelPctPerSec = 0.0f;
-        }
-
-        profSpeedPercent = static_cast<float>(newSpeed);
-        ESP_LOGD(TAG, "profile S: dt=%.4f des=%.2f a*=%.2f j*=%.2f -> a=%.2f prof=%.2f", timeStepSec, desiredClamped, accelTarget, jerkCap, profAccelPctPerSec,
-                 profSpeedPercent);
-    }
-
-    lastProfileUs = nowUs;
-    return profSpeedPercent;
-}
-
 void MotorController::update() {
     uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
 
-
     auto hit = [](uint64_t& lastLogUs, uint64_t now, uint32_t ms) {
-        if (now - lastLogUs >= (uint64_t)ms * 1000ULL) {
+        if (now - lastLogUs >= static_cast<uint64_t>(ms) * 1000ULL) {
             lastLogUs = now;
             return true;
         }
@@ -588,19 +476,12 @@ void MotorController::update() {
     if (motionDone.load(std::memory_order_relaxed)) {
         MotorControllerConfig cfg0 = getConfig();
         float drift = currentTarget - currentPos;
-        float wakeTh = cfg0.driftDeadband + cfg0.driftHysteresis;
-        float wakeThLog = wakeTh;
-        if (wakeThLog < 0.0f) {
-            wakeThLog = 0.0f;
-        }
         if (hit(lastStateLogUs, nowUs, 500)) {
-            ESP_LOGD(TAG, "idle: drift=%.3f wakeTh=%.3f", drift, wakeThLog);
+            float wakeTh = cfg0.guard.driftDeadband + cfg0.guard.driftHysteresis;
+            if (wakeTh < 0.0f) wakeTh = 0.0f;
+            ESP_LOGD(TAG, "idle: drift=%.3f wakeTh=%.3f", drift, wakeTh);
         }
-        float wakeThreshold = wakeTh;
-        if (wakeThreshold < 0.0f) {
-            wakeThreshold = 0.0f;
-        }
-        if (fabsf(drift) > wakeThreshold) {
+        if (motionGuard.shouldWake(drift, cfg0.guard)) {
             setTargetDegrees(currentTarget);
         }
         return;
@@ -608,27 +489,15 @@ void MotorController::update() {
 
     MotorControllerConfig cfg = getConfig();
 
-    if (cfg.motionTimeoutMs > 0) {
-        if (motionStartUs == 0) {
-            motionStartUs = nowUs;
+    if (motionGuard.isTimedOut(nowUs, cfg.guard)) {
+        motor.stop();
+        motionDone.store(true, std::memory_order_relaxed);
+        if (onStallCb) {
+            MotorStatus s0 = getStatus();
+            onStallCb(s0, onStallUser);
         }
-        uint64_t elapsedUs = nowUs - motionStartUs;
-        uint64_t limitUs = (uint64_t)cfg.motionTimeoutMs * 1000ULL;
-        if (elapsedUs > limitUs) {
-            ESP_LOGW(TAG, "timeout: %llu ms > %u ms", (unsigned long long)(elapsedUs / 1000ULL), (unsigned int)cfg.motionTimeoutMs);
-            motor.stop();
-            motionDone.store(true, std::memory_order_relaxed);
-            if (onStallCb) {
-                MotorStatus s0 = getStatus();
-                onStallCb(s0, onStallUser);
-            }
-            motionStartUs = 0;
-            profSpeedPercent = 0.0f;
-            profAccelPctPerSec = 0.0f;
-            lastProfileUs = 0;
-            settleCounter = 0;
-            return;
-        }
+        resetMotionState(0);
+        return;
     }
 
     float pidSignal = pid.compute(currentTarget, currentPos);
@@ -642,7 +511,7 @@ void MotorController::update() {
     }
 
     float refPos = currentTarget;
-    float refVelPct = profSpeedPercent;
+    float refVelPct = profiler.getProfiledSpeed();
     float ff = cfg.Kff_pos * refPos + cfg.Kff_vel * refVelPct;
 
     if (hit(lastPidLogUs, nowUs, 500)) {
@@ -650,35 +519,16 @@ void MotorController::update() {
     }
 
     float combined = clampToPercentRange(pidSignal + ff);
-    if (softLimitsEnforced == true) {
-        if (combined < 0.0f && currentPos <= softMinDeg) {
-            ESP_LOGW(TAG, "limit: LEFT at %.3f (softMin %.3f), stopping", currentPos, softMinDeg);
-            motor.stop();
-            motionDone.store(true, std::memory_order_relaxed);
-            if (onLimitHitCb) {
-                MotorStatus s1 = getStatus();
-                onLimitHitCb(s1, onLimitHitUser);
-            }
-            profSpeedPercent = 0.0f;
-            profAccelPctPerSec = 0.0f;
-            lastProfileUs = 0;
-            settleCounter = 0;
-            return;
+
+    if (softLimiter.isBlocked(combined, currentPos)) {
+        motor.stop();
+        motionDone.store(true, std::memory_order_relaxed);
+        if (onLimitHitCb) {
+            MotorStatus s1 = getStatus();
+            onLimitHitCb(s1, onLimitHitUser);
         }
-        if (combined > 0.0f && currentPos >= softMaxDeg) {
-            ESP_LOGW(TAG, "limit: RIGHT at %.3f (softMax %.3f), stopping", currentPos, softMaxDeg);
-            motor.stop();
-            motionDone.store(true, std::memory_order_relaxed);
-            if (onLimitHitCb) {
-                MotorStatus s2 = getStatus();
-                onLimitHitCb(s2, onLimitHitUser);
-            }
-            profSpeedPercent = 0.0f;
-            profAccelPctPerSec = 0.0f;
-            lastProfileUs = 0;
-            settleCounter = 0;
-            return;
-        }
+        resetMotionState(0);
+        return;
     }
 
     float errAbs = fabsf(currentTarget - currentPos);
@@ -690,108 +540,62 @@ void MotorController::update() {
         mag = cfg.maxSpeed;
     }
 
-    float signedDesired;
-    if (combined >= 0.0f) {
-        signedDesired = mag;
-    } else {
-        signedDesired = -mag;
-    }
-    float profiled = shapeSpeedWithProfile(signedDesired, nowUs);
+    float signedDesired = (combined >= 0.0f) ? mag : -mag;
+
+    float profiled = profiler.shapeSpeed(signedDesired, nowUs, cfg.profiler);
 
     float dpos = currentPos - lastPos;
-    float vel = dpos * (float)updateHz;
+    float vel = dpos * static_cast<float>(updateHz);
     lastVelDegPerSec = vel;
     if (hit(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "state: err=%.3f vel=%.3f deg/s", currentTarget - currentPos, vel);
     }
 
-    if (pidWarmupCounter <= cfg.pidWarmupLimit) {
-        stuckCounter = 0;
-        settleCounter = 0;
-    } else {
-        float moveAbs = fabsf(dpos);
-        if (errAbs > cfg.minErrorToMove && moveAbs < cfg.stuckPositionEpsilon) {
-            stuckCounter++;
-        } else {
-            stuckCounter = 0;
-        }
-        bool posOk = (errAbs < cfg.settlePosTolDeg);
-        bool velOk = (fabsf(vel) < cfg.settleVelTolDegPerSec);
-        if (posOk && velOk) {
-            settleCounter++;
-        } else {
-            settleCounter = 0;
-        }
+    bool pidIsSettled = false;
+    if (!stallDetector.isWarming()) {
+        pidIsSettled = pid.isSettled();
+    }
+    StallDetector::Result stallResult = stallDetector.update(dpos, errAbs, pidIsSettled, cfg.stall);
+
+    bool settled = false;
+    if (stallResult != StallDetector::Result::WARMING_UP) {
+        settled = settleDetector.update(errAbs, vel, cfg.settle);
         if (hit(lastStateLogUs, nowUs, 500)) {
-            ESP_LOGD(TAG, "settle: posOk=%d velOk=%d cnt=%d | stuckCnt=%d move=%.4f eps=%.4f", (int)posOk, (int)velOk, settleCounter, stuckCounter, moveAbs,
-                     cfg.stuckPositionEpsilon);
+            ESP_LOGD(TAG, "settle: cnt=%d | stuckCnt=%d move=%.4f eps=%.4f",
+                     settleDetector.getCount(), stallDetector.getStuckCount(), fabsf(dpos), cfg.stall.stuckPositionEpsilon);
         }
     }
 
-    if (settleCounter >= cfg.settleCountLimit) {
-        ESP_LOGI(TAG, "motion DONE: settleCnt=%d", settleCounter);
+    if (settled) {
+        ESP_LOGI(TAG, "motion DONE: settleCnt=%d", settleDetector.getCount());
         motor.stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onMotionDoneCb) {
-            MotorStatus s3 = getStatus();
-            onMotionDoneCb(s3, onMotionDoneUser);
+            MotorStatus s2 = getStatus();
+            onMotionDoneCb(s2, onMotionDoneUser);
         }
-        motionStartUs = 0;
-        profSpeedPercent = 0.0f;
-        profAccelPctPerSec = 0.0f;
-        lastProfileUs = 0;
-        settleCounter = 0;
+        resetMotionState(0);
         lastPos = currentPos;
         return;
     }
 
-    bool pidSettledFlag = false;
-    if (pidWarmupCounter > cfg.pidWarmupLimit) {
-        pidSettledFlag = pid.isSettled();
-    }
-
-    if (stuckCounter > cfg.stuckCountLimit || (pidWarmupCounter > cfg.pidWarmupLimit && pidSettledFlag == true)) {
-        // ESP_LOGW(TAG, "stall: stuckCnt=%d pidSettled=%d", stuckCounter, (int)pidSettledFlag);
+    if (stallResult == StallDetector::Result::STALLED) {
         motor.stop();
         float finalDriftAbs = fabsf(currentTarget - currentPos);
-        bool doneOk = (finalDriftAbs <= cfg.driftDeadband);
+        bool doneOk = (finalDriftAbs <= MotionGuard::getDriftDeadband(cfg.guard));
         motionDone.store(doneOk, std::memory_order_relaxed);
         if (onStallCb) {
-            MotorStatus s4 = getStatus();
-            onStallCb(s4, onStallUser);
+            MotorStatus s3 = getStatus();
+            onStallCb(s3, onStallUser);
         }
-        motionStartUs = 0;
-        profSpeedPercent = 0.0f;
-        profAccelPctPerSec = 0.0f;
-        lastProfileUs = 0;
-        settleCounter = 0;
+        profiler.reset(0);
+        settleDetector.reset();
+        motionGuard.reset();
         lastPos = currentPos;
         return;
     }
 
-    pidWarmupCounter++;
-
-    if (slewLastUs == 0) {
-        slewLastUs = nowUs;
-        slewLastOutPct = 0.0f;
-    }
-
-    double dt = (double)(nowUs - slewLastUs) / 1e6;
-    if (dt < 0.0) {
-        dt = 0.0;
-    }
-    double maxDelta = (double)cfg.accelLimitPctPerSec * dt;
-    double reqDelta = (double)profiled - (double)slewLastOutPct;
-    if (reqDelta > maxDelta) {
-        reqDelta = maxDelta;
-    }
-    if (reqDelta < -maxDelta) {
-        reqDelta = -maxDelta;
-    }
-    float slewOut = (float)((double)slewLastOutPct + reqDelta);
-
-    slewLastOutPct = slewOut;
-    slewLastUs = nowUs;
+    float slewOut = profiler.applySlew(profiled, nowUs, cfg.profiler.accelLimitPctPerSec);
 
     float speedPct = fabsf(slewOut);
     if (speedPct > cfg.maxSpeed) {
@@ -806,10 +610,7 @@ void MotorController::update() {
     motor.setSpeed(speedPct);
 
     if (hit(lastCmdLogUs, nowUs, 250)) {
-        const char* dirStr = "RIGHT";
-        if (slewOut < 0.0f) {
-            dirStr = "LEFT";
-        }
+        const char* dirStr = (slewOut < 0.0f) ? "LEFT" : "RIGHT";
         ESP_LOGI(TAG, "cmd: dir=%s speed=%.2f%%", dirStr, speedPct);
     }
 
@@ -839,15 +640,15 @@ MotorStatus MotorController::getStatus() const {
     status.error = currentTarget - currentPos;
     status.velocity = lastVelDegPerSec;
     status.pidOutput = lastPidOut;
-    status.stuckCount = stuckCounter;
+    status.stuckCount = stallDetector.getStuckCount();
     status.motionDone = motionDone.load(std::memory_order_relaxed);
     return status;
 }
 
 void MotorController::logMotorStatus(const MotorStatus& status) {
     ESP_LOGI(TAG, "=== Motor Status ===");
-    ESP_LOGI(TAG, "Target: %.3f°, Position: %.3f°, Error: %.3f°", status.target, status.position, status.error);
-    ESP_LOGI(TAG, "Velocity: %.3f°/s, PID Output: %.3f", status.velocity, status.pidOutput);
+    ESP_LOGI(TAG, "Target: %.3f, Position: %.3f, Error: %.3f", status.target, status.position, status.error);
+    ESP_LOGI(TAG, "Velocity: %.3f/s, PID Output: %.3f", status.velocity, status.pidOutput);
     ESP_LOGI(TAG, "Stuck Count: %d, Motion Done: %s", status.stuckCount, status.motionDone ? "YES" : "NO");
     ESP_LOGI(TAG, "====================");
 }
@@ -855,32 +656,17 @@ void MotorController::logMotorStatus(const MotorStatus& status) {
 void MotorController::setSoftLimits(float minDeg, float maxDeg, bool enforce) {
     ESP_LOGI(TAG, "setSoftLimits: req[%.3f, %.3f], enforce=%d", minDeg, maxDeg, static_cast<int>(enforce));
 
-    if (minDeg > maxDeg) {
-        float tmp = minDeg;
-        minDeg = maxDeg;
-        maxDeg = tmp;
-        ESP_LOGW(TAG, "setSoftLimits: min>max, swapped");
-    }
+    softLimiter.setLimits(minDeg, maxDeg, enforce);
 
-    softMinDeg = minDeg;
-    softMaxDeg = maxDeg;
-    softLimitsEnforced = enforce ? true : false;
-
-    if (softLimitsEnforced == true) {
-        float clamped = target;
-
-        if (clamped < softMinDeg) {
-            clamped = softMinDeg;
-        }
-        if (clamped > softMaxDeg) {
-            clamped = softMaxDeg;
-        }
-
+    if (softLimiter.isEnforced()) {
+        float clamped = softLimiter.clampTarget(target);
         if (fabsf(clamped - target) > 1e-6f) {
             ESP_LOGW(TAG, "Target clamped to %.3f due to soft limits", clamped);
+            setTargetDegrees(clamped);
         }
-        setTargetDegrees(clamped);
     }
 
-    ESP_LOGI(TAG, "Soft limits set: [%.3f°, %.3f°], %s", softMinDeg, softMaxDeg, softLimitsEnforced ? "ENFORCED" : "NOT ENFORCED");
+    ESP_LOGI(TAG, "Soft limits set: [%.3f, %.3f], %s",
+             softLimiter.getMinDeg(), softLimiter.getMaxDeg(),
+             softLimiter.isEnforced() ? "ENFORCED" : "NOT ENFORCED");
 }
