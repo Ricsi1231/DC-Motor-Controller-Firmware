@@ -1,6 +1,7 @@
 #include "USB.hpp"
 #include "esp_log.h"
 #include "tinyusb.h"
+#include "tinyusb_default_config.h"
 #include "tinyusb_cdc_acm.h"
 
 namespace DC_Motor_Controller_Firmware {
@@ -26,7 +27,9 @@ USB::~USB() {}
 esp_err_t USB::init() {
     esp_err_t returnValue = ESP_OK;
 
-    const tinyusb_config_t usbCfg = {};
+    const tinyusb_config_t usbCfg = {
+        .task = TINYUSB_TASK_DEFAULT(),
+    };
 
     tinyusb_config_cdcacm_t amcCfg = {.cdc_port = TINYUSB_CDC_ACM_0,
                                       .callback_rx = &usbCallback,

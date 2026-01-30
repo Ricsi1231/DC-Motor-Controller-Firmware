@@ -14,7 +14,7 @@ DRV8876Config motorConfig = {
     .phPin = GPIO_NUM_4,
     .enPin = GPIO_NUM_5,
     .nFault = GPIO_NUM_6,
-    .nSleep = GPIO_NUM_NC,
+    .nSleep = GPIO_NUM_7,
     .pwmChannel = LEDC_CHANNEL_0,
     .resolution = LEDC_TIMER_10_BIT,
     .frequency = 20000,
@@ -26,8 +26,8 @@ DRV8876Config motorConfig = {
 };
 
 EncoderConfig encoderConfig = {
-    .pinA = GPIO_NUM_1,
-    .pinB = GPIO_NUM_2,
+    .pinA = GPIO_NUM_2,
+    .pinB = GPIO_NUM_1,
     .unitConfig = {.low_limit = -1000,
                    .high_limit = 1000,
                    .flags = {

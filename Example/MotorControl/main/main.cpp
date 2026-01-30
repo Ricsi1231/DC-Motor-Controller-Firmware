@@ -21,8 +21,8 @@ constexpr gpio_num_t PH_PIN = GPIO_NUM_4;
 constexpr gpio_num_t EN_PIN = GPIO_NUM_5;
 constexpr gpio_num_t FAULT_PIN = GPIO_NUM_6;
 constexpr gpio_num_t SLEEP_PIN = GPIO_NUM_7;
-constexpr gpio_num_t ENCODER_A = GPIO_NUM_1;
-constexpr gpio_num_t ENCODER_B = GPIO_NUM_2;
+constexpr gpio_num_t ENCODER_A = GPIO_NUM_2;
+constexpr gpio_num_t ENCODER_B = GPIO_NUM_1;
 
 constexpr DRV8876Config motorConfig{.phPin = PH_PIN,
                                     .enPin = EN_PIN,
