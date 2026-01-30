@@ -8,7 +8,7 @@ using namespace DC_Motor_Controller_Firmware;
 using namespace Control;
 
 MotorController::MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pidRef, const MotorControllerConfig& initialConfig)
-    : encoder(enc), motor(drv), pid(pidRef), fuzzy(PID::FuzzyPidConfig{}), config(initialConfig) {
+    : encoder(enc), motor(drv), pid(pidRef), config(initialConfig) {
     ESP_LOGI(TAG, "Ctor: creating mutexes");
     targetMutex = xSemaphoreCreateMutex();
     if (targetMutex == nullptr) {
@@ -20,24 +20,6 @@ MotorController::MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, P
         ESP_LOGE(TAG, "Failed to create config mutex");
     }
 
-    ESP_LOGI(TAG, "Ctor done");
-}
-
-MotorController::MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pidRef, PID::FuzzyPIDController& fuzzyRef,
-                                 const MotorControllerConfig& cfg)
-    : encoder(enc), motor(drv), pid(pidRef), fuzzy(fuzzyRef), config(cfg) {
-    ESP_LOGI(TAG, "Ctor: creating mutexes");
-    targetMutex = xSemaphoreCreateMutex();
-    if (targetMutex == nullptr) {
-        ESP_LOGE(TAG, "Failed to create target mutex");
-    }
-
-    configMutex = xSemaphoreCreateMutex();
-    if (configMutex == nullptr) {
-        ESP_LOGE(TAG, "Failed to create config mutex");
-    }
-
-    useFuzzy = true;
     ESP_LOGI(TAG, "Ctor done");
 }
 
@@ -59,9 +41,8 @@ MotorController::~MotorController() {
 }
 
 MotorController::MotorController(MotorController&& other) noexcept
-    : encoder(other.encoder), motor(other.motor), pid(other.pid), fuzzy(other.fuzzy), config(other.config) {
+    : encoder(other.encoder), motor(other.motor), pid(other.pid), config(other.config) {
     ESP_LOGI(TAG, "Move Ctor start");
-    useFuzzy = other.useFuzzy;
     target = other.target;
     motionDone.store(other.motionDone.load(std::memory_order_relaxed), std::memory_order_relaxed);
     lastPos = other.lastPos;
@@ -144,11 +125,7 @@ void MotorController::setTargetDegrees(float degrees) {
         ESP_LOGW(TAG, "setTargetDegrees without mutex");
     }
 
-    if (useFuzzy) {
-        fuzzy.reset();
-    } else {
-        pid.reset();
-    }
+    pid.reset();
 
     motionDone.store(false, std::memory_order_relaxed);
     lastPos = encoder.getPositionInDegrees();
@@ -274,13 +251,7 @@ void MotorController::setPID(float kp, float ki, float kd) {
     ESP_LOGI(TAG, "PID set: Kp=%.4f Ki=%.4f Kd=%.4f", kp, ki, kd);
 }
 
-void MotorController::getPID(float& kp, float& ki, float& kd) {
-    if (useFuzzy) {
-        fuzzy.getCurrentGains(kp, ki, kd);
-    } else {
-        pid.getParameters(kp, ki, kd);
-    }
-}
+void MotorController::getPID(float& kp, float& ki, float& kd) { pid.getParameters(kp, ki, kd); }
 
 void MotorController::setConfig(const MotorControllerConfig& newConfig) {
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
@@ -475,28 +446,27 @@ void MotorController::setOnLimitHit(MotionEventCallback cb, void* user) {
 bool MotorController::isMotionDone() const { return motionDone.load(std::memory_order_relaxed); }
 
 float MotorController::clampToPercentRange(float signal) const {
-    static float previousValue = NAN;  // remembers across calls
     float clampedValue = signal;
 
     if (!std::isfinite(clampedValue)) {
-        if (clampedValue != previousValue) ESP_LOGW(TAG, "clamp: non-finite signal -> 0");
-        previousValue = 0.0f;
+        if (clampedValue != clampPreviousValue) ESP_LOGW(TAG, "clamp: non-finite signal -> 0");
+        clampPreviousValue = 0.0f;
         return 0.0f;
     }
 
     if (clampedValue > 100.0f) {
-        if (previousValue != 100.0f) ESP_LOGW(TAG, "clamp: %.3f -> 100.0", clampedValue);
-        previousValue = 100.0f;
+        if (clampPreviousValue != 100.0f) ESP_LOGW(TAG, "clamp: %.3f -> 100.0", clampedValue);
+        clampPreviousValue = 100.0f;
         return 100.0f;
     }
 
     if (clampedValue < -100.0f) {
-        if (previousValue != -100.0f) ESP_LOGW(TAG, "clamp: %.3f -> -100.0", clampedValue);
-        previousValue = -100.0f;
+        if (clampPreviousValue != -100.0f) ESP_LOGW(TAG, "clamp: %.3f -> -100.0", clampedValue);
+        clampPreviousValue = -100.0f;
         return -100.0f;
     }
 
-    previousValue = clampedValue;
+    clampPreviousValue = clampedValue;
     return clampedValue;
 }
 
@@ -592,14 +562,10 @@ float MotorController::shapeSpeedWithProfile(float desiredSigned, uint64_t nowUs
 void MotorController::update() {
     uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
 
-    static uint64_t t_lastPid = 0;
-    static uint64_t t_lastState = 0;
-    static uint64_t t_lastCmd = 0;
-    static uint64_t t_lastStatus = 0;
 
-    auto hit = [](uint64_t& t_last, uint64_t now, uint32_t ms) {
-        if (now - t_last >= (uint64_t)ms * 1000ULL) {
-            t_last = now;
+    auto hit = [](uint64_t& lastLogUs, uint64_t now, uint32_t ms) {
+        if (now - lastLogUs >= (uint64_t)ms * 1000ULL) {
+            lastLogUs = now;
             return true;
         }
         return false;
@@ -615,7 +581,7 @@ void MotorController::update() {
     }
 
     float currentPos = encoder.getPositionInDegrees();
-    if (hit(t_lastState, nowUs, 500)) {
+    if (hit(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "update: t=%llu us, tgt=%.3f pos=%.3f", (unsigned long long)nowUs, currentTarget, currentPos);
     }
 
@@ -627,7 +593,7 @@ void MotorController::update() {
         if (wakeThLog < 0.0f) {
             wakeThLog = 0.0f;
         }
-        if (hit(t_lastState, nowUs, 500)) {
+        if (hit(lastStateLogUs, nowUs, 500)) {
             ESP_LOGD(TAG, "idle: drift=%.3f wakeTh=%.3f", drift, wakeThLog);
         }
         float wakeThreshold = wakeTh;
@@ -665,22 +631,13 @@ void MotorController::update() {
         }
     }
 
-    float pidSignal = 0;
-    if (useFuzzy == true) {
-        pidSignal = fuzzy.compute(currentTarget, currentPos);
-    } else {
-        pidSignal = pid.compute(currentTarget, currentPos);
-    }
+    float pidSignal = pid.compute(currentTarget, currentPos);
     pidSignal = clampToPercentRange(pidSignal);
     lastPidOut = pidSignal;
 
-    if (hit(t_lastPid, nowUs, 500)) {
+    if (hit(lastPidLogUs, nowUs, 500)) {
         float Kp = 0.0f, Ki = 0.0f, Kd = 0.0f;
-        if (useFuzzy == true) {
-            fuzzy.getCurrentGains(Kp, Ki, Kd);
-        } else {
-            getPID(Kp, Ki, Kd);
-        }
+        getPID(Kp, Ki, Kd);
         ESP_LOGD(TAG, "pid: Kp=%.4f Ki=%.4f Kd=%.4f out=%.3f", Kp, Ki, Kd, pidSignal);
     }
 
@@ -688,7 +645,7 @@ void MotorController::update() {
     float refVelPct = profSpeedPercent;
     float ff = cfg.Kff_pos * refPos + cfg.Kff_vel * refVelPct;
 
-    if (hit(t_lastPid, nowUs, 500)) {
+    if (hit(lastPidLogUs, nowUs, 500)) {
         ESP_LOGV(TAG, "ff: Kpos=%.4f Kvel=%.4f refPos=%.3f refVel%%=%.2f ff=%.3f", cfg.Kff_pos, cfg.Kff_vel, refPos, refVelPct, ff);
     }
 
@@ -744,7 +701,7 @@ void MotorController::update() {
     float dpos = currentPos - lastPos;
     float vel = dpos * (float)updateHz;
     lastVelDegPerSec = vel;
-    if (hit(t_lastState, nowUs, 500)) {
+    if (hit(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "state: err=%.3f vel=%.3f deg/s", currentTarget - currentPos, vel);
     }
 
@@ -765,7 +722,7 @@ void MotorController::update() {
         } else {
             settleCounter = 0;
         }
-        if (hit(t_lastState, nowUs, 500)) {
+        if (hit(lastStateLogUs, nowUs, 500)) {
             ESP_LOGD(TAG, "settle: posOk=%d velOk=%d cnt=%d | stuckCnt=%d move=%.4f eps=%.4f", (int)posOk, (int)velOk, settleCounter, stuckCounter, moveAbs,
                      cfg.stuckPositionEpsilon);
         }
@@ -790,11 +747,7 @@ void MotorController::update() {
 
     bool pidSettledFlag = false;
     if (pidWarmupCounter > cfg.pidWarmupLimit) {
-        if (useFuzzy == true) {
-            pidSettledFlag = fuzzy.isSettled();
-        } else {
-            pidSettledFlag = pid.isSettled();
-        }
+        pidSettledFlag = pid.isSettled();
     }
 
     if (stuckCounter > cfg.stuckCountLimit || (pidWarmupCounter > cfg.pidWarmupLimit && pidSettledFlag == true)) {
@@ -818,29 +771,27 @@ void MotorController::update() {
 
     pidWarmupCounter++;
 
-    static float lastOutPct = 0.0f;
-    static uint64_t lastSlewUs = 0;
-    if (lastSlewUs == 0) {
-        lastSlewUs = nowUs;
-        lastOutPct = 0.0f;
+    if (slewLastUs == 0) {
+        slewLastUs = nowUs;
+        slewLastOutPct = 0.0f;
     }
 
-    double dt = (double)(nowUs - lastSlewUs) / 1e6;
+    double dt = (double)(nowUs - slewLastUs) / 1e6;
     if (dt < 0.0) {
         dt = 0.0;
     }
     double maxDelta = (double)cfg.accelLimitPctPerSec * dt;
-    double reqDelta = (double)profiled - (double)lastOutPct;
+    double reqDelta = (double)profiled - (double)slewLastOutPct;
     if (reqDelta > maxDelta) {
         reqDelta = maxDelta;
     }
     if (reqDelta < -maxDelta) {
         reqDelta = -maxDelta;
     }
-    float slewOut = (float)((double)lastOutPct + reqDelta);
+    float slewOut = (float)((double)slewLastOutPct + reqDelta);
 
-    lastOutPct = slewOut;
-    lastSlewUs = nowUs;
+    slewLastOutPct = slewOut;
+    slewLastUs = nowUs;
 
     float speedPct = fabsf(slewOut);
     if (speedPct > cfg.maxSpeed) {
@@ -854,7 +805,7 @@ void MotorController::update() {
     motor.setDirection(dir);
     motor.setSpeed(speedPct);
 
-    if (hit(t_lastCmd, nowUs, 250)) {
+    if (hit(lastCmdLogUs, nowUs, 250)) {
         const char* dirStr = "RIGHT";
         if (slewOut < 0.0f) {
             dirStr = "LEFT";
@@ -864,7 +815,7 @@ void MotorController::update() {
 
     lastPos = currentPos;
 
-    if (hit(t_lastStatus, nowUs, 1000)) {
+    if (hit(lastStatusLogUs, nowUs, 1000)) {
         MotorStatus s = getStatus();
         logMotorStatus(s);
     }

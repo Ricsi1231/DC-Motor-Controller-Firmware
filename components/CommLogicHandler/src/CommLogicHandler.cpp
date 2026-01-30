@@ -1,4 +1,5 @@
 #include "CommLogicHandler.hpp"
+#include "esp_log.h"
 #include "esp_task_wdt.h"
 #include <cmath>
 
@@ -9,16 +10,19 @@ CommLogicHandler::CommLogicHandler(Communication::MotorCommHandler& comm, Contro
 
 void CommLogicHandler::startTask() {
     if (taskHandle == nullptr) {
-        xTaskCreate(taskFunc, "CommLogicTask", 4096, this, 5, &taskHandle);
+        BaseType_t ret = xTaskCreate(taskFunc, "CommLogicTask", 4096, this, 5, &taskHandle);
+        if (ret != pdPASS) {
+            ESP_LOGE("CommLogicHandler", "Failed to create CommLogicTask");
+        }
     }
 }
 
 void CommLogicHandler::taskFunc(void* param) {
     auto* self = static_cast<CommLogicHandler*>(param);
 
-    if (self->getPIDValuesFirsTime) {
+    if (self->getPIDValuesFirstTime) {
         self->motorControl.getPID(self->kp, self->ki, self->kd);
-        self->getPIDValuesFirsTime = false;
+        self->getPIDValuesFirstTime = false;
     }
 
     while (true) {
@@ -50,7 +54,7 @@ void CommLogicHandler::taskFunc(void* param) {
             }
         }
 
-        if ((fabsf(self->encoder.getPositionInDegrees() - self->targetDegree)) && !self->settled) {
+        if ((fabsf(self->encoder.getPositionInDegrees() - self->targetDegree) <= settledToleranceDeg) && !self->settled) {
             if (self->motorComm.isUSBOpen()) {
                 self->motorComm.notifyMotorPositionReached();
             }

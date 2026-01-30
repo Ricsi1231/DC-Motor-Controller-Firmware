@@ -357,9 +357,10 @@ class Encoder {
     float gearRatio;              ///< Mechanical gear ratio
 
     // PCNT resources
-    pcnt_channel_handle_t chanA;  ///< PCNT channel for A
-    pcnt_channel_handle_t chanB;  ///< PCNT channel for B
-    esp_timer_handle_t timer;     ///< Periodic RPM calc timer
+    pcnt_unit_handle_t pcntUnit = nullptr;  ///< PCNT unit handle
+    pcnt_channel_handle_t chanA;            ///< PCNT channel for A
+    pcnt_channel_handle_t chanB;            ///< PCNT channel for B
+    esp_timer_handle_t timer;               ///< Periodic RPM calc timer
 
     // PCNT 64-bit accumulator
     volatile int64_t baseCount;  ///< Sum of watchpoint chunks

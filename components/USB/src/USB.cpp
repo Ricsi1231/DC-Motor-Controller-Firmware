@@ -1,11 +1,11 @@
 #include "USB.hpp"
 #include "esp_log.h"
 #include "tinyusb.h"
-#include "tusb_cdc_acm.h"
+#include "tinyusb_cdc_acm.h"
 
 namespace DC_Motor_Controller_Firmware {
 namespace USB {
-bool USB::serialIsOpen = false;
+std::atomic<bool> USB::serialIsOpen{false};
 uint8_t USB::rxBuffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1] = {0};
 USB::usbMessage USB::message = {};
 
@@ -26,12 +26,9 @@ USB::~USB() {}
 esp_err_t USB::init() {
     esp_err_t returnValue = ESP_OK;
 
-    const tinyusb_config_t usbCfg = {
-        .device_descriptor = NULL, .string_descriptor = NULL, .external_phy = false, .configuration_descriptor = NULL, .vbus_monitor_io = -1};
+    const tinyusb_config_t usbCfg = {};
 
-    tinyusb_config_cdcacm_t amcCfg = {.usb_dev = TINYUSB_USBDEV_0,
-                                      .cdc_port = TINYUSB_CDC_ACM_0,
-                                      .rx_unread_buf_sz = 64,
+    tinyusb_config_cdcacm_t amcCfg = {.cdc_port = TINYUSB_CDC_ACM_0,
                                       .callback_rx = &usbCallback,
                                       .callback_rx_wanted_char = NULL,
                                       .callback_line_state_changed = NULL,
@@ -44,7 +41,7 @@ esp_err_t USB::init() {
         return ESP_FAIL;
     }
 
-    returnValue = tusb_cdc_acm_init(&amcCfg);
+    returnValue = tinyusb_cdcacm_init(&amcCfg);
 
     if (returnValue != ESP_OK) {
         ESP_LOGW(TAG, "USB init - cannot install acm config, trying to use other port");
@@ -52,7 +49,7 @@ esp_err_t USB::init() {
         amcCfg.cdc_port = TINYUSB_CDC_ACM_1;
         USB::USB_INTERFACE_PORT = TINYUSB_CDC_ACM_1;
 
-        returnValue = tusb_cdc_acm_init(&amcCfg);
+        returnValue = tinyusb_cdcacm_init(&amcCfg);
 
         if (returnValue != ESP_OK) {
             ESP_LOGW(TAG, "USB init - cannot install acm config, port or other problem");
@@ -72,7 +69,7 @@ esp_err_t USB::init() {
     return ESP_OK;
 }
 
-void USB::serialPortState(int itf, cdcacm_event_t* event) { serialIsOpen = static_cast<bool>(event->line_state_changed_data.dtr); }
+void USB::serialPortState(int itf, cdcacm_event_t* event) { serialIsOpen.store(static_cast<bool>(event->line_state_changed_data.dtr), std::memory_order_relaxed); }
 
 void USB::usbCallback(int itf, cdcacm_event_t* event) {
     size_t length = 0;
@@ -86,9 +83,8 @@ void USB::usbCallback(int itf, cdcacm_event_t* event) {
         return;
     }
 
-    rxBuffer[length] = '\0';
-
     taskENTER_CRITICAL_ISR(&usbSpinLock);
+    rxBuffer[length] = '\0';
     messageArrived = true;
     taskEXIT_CRITICAL_ISR(&usbSpinLock);
 
@@ -108,7 +104,7 @@ esp_err_t USB::receiveData(uint8_t* data, size_t* rxBufferSize) {
     return ESP_OK;
 }
 
-esp_err_t USB::sendData(uint8_t* data, size_t dataSize) {
+esp_err_t USB::sendData(const uint8_t* data, size_t dataSize) {
     esp_err_t errorState = ESP_OK;
     size_t usbDataSize;
 
@@ -186,10 +182,12 @@ void USB::flushRxBuffer() {
     taskENTER_CRITICAL(&usbSpinLock);
     message.bufferSize = 0;
     memset(message.buffer, 0, sizeof(message.buffer));
+    memset(rxBuffer, 0, sizeof(rxBuffer));
+    messageArrived = false;
     taskEXIT_CRITICAL(&usbSpinLock);
 }
 
-bool USB::usbIsConnected() const { return serialIsOpen && isInitialized; }
-bool USB::newDataIsReceived() const { return rxSize > 0; }
+bool USB::usbIsConnected() const { return serialIsOpen.load(std::memory_order_relaxed) && isInitialized; }
+bool USB::newDataIsReceived() const { return messageArrived; }
 }  // namespace USB
 }  // namespace DC_Motor_Controller_Firmware

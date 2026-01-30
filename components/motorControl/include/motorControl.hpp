@@ -11,13 +11,13 @@
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "PID.hpp"
-#include "FuzzyPIDController.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 
 namespace DC_Motor_Controller_Firmware::Control {
@@ -104,9 +104,6 @@ class MotorController {
      * @param cfg Optional control parameters (default config used if omitted)
      */
     MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pid, const MotorControllerConfig& cfg = MotorControllerConfig());
-
-    MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pid, PID::FuzzyPIDController& fuzzy,
-                    const MotorControllerConfig& cfg = MotorControllerConfig());
 
     /**
      * @brief Destructor.
@@ -343,11 +340,8 @@ class MotorController {
   private:
     Encoder::Encoder& encoder;      ///< Encoder feedback interface
     DRV8876::DRV8876& motor;        ///< Motor driver interface
-    PID::PIDController& pid;        ///< PID regulator instance
-    PID::FuzzyPIDController fuzzy;  ///< Fuzzy-PID scheduler instance
-    MotorControllerConfig config;   ///< User-defined motion parameters
-
-    bool useFuzzy = false;
+    PID::PIDController& pid;       ///< PID regulator instance
+    MotorControllerConfig config;  ///< User-defined motion parameters
 
     float target = 0;                         ///< Target position in degrees
     std::atomic<bool> motionDone{true};       ///< True if motion is complete
@@ -389,6 +383,16 @@ class MotorController {
 
     MotionEventCallback onLimitHitCb = nullptr;
     void* onLimitHitUser = nullptr;
+
+    mutable float clampPreviousValue = NAN;  ///< Previous clamped value for log suppression
+
+    uint64_t lastPidLogUs = 0;     ///< Timestamp for periodic PID logging (us)
+    uint64_t lastStateLogUs = 0;   ///< Timestamp for periodic state logging (us)
+    uint64_t lastCmdLogUs = 0;     ///< Timestamp for periodic command logging (us)
+    uint64_t lastStatusLogUs = 0;  ///< Timestamp for periodic status logging (us)
+
+    float slewLastOutPct = 0.0f;  ///< Previous slew-rate-limited output (%)
+    uint64_t slewLastUs = 0;      ///< Timestamp of last slew-rate update (us)
 
     static constexpr const char* TAG = "MotorController";  ///< Log tag
 

@@ -21,7 +21,6 @@
 #include "MotorCommHandler.hpp"
 #include "PID.hpp"
 #include "PeripheralSettings.hpp"
-#include "Pinout.hpp"
 #include "USB.hpp"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -42,8 +41,8 @@ const char *TAG = "MAIN APP";
 
 USB usb;
 MotorCommHandler motorComm(usb);
-DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
-Encoder encoder(ENCODER_A, ENCODER_B, pcntUnit, ppr);
+DRV8876 motor(motorConfig);
+Encoder encoder(encoderConfig);
 PIDController pid(defaultConfig);
 MotorController motorControl(encoder, motor, pid, motorCfg);
 CommLogicHandler commLogic(motorComm, motorControl, encoder);

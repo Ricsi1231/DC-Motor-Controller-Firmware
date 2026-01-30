@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include "tusb_cdc_acm.h"
+#include "tinyusb_cdc_acm.h"
+#include <atomic>
 
 namespace DC_Motor_Controller_Firmware {
 namespace USB {
@@ -53,7 +54,7 @@ class USB {
      * @param dataSize Number of bytes to send
      * @return esp_err_t ESP_OK if successful
      */
-    esp_err_t sendData(uint8_t* data, size_t dataSize);
+    esp_err_t sendData(const uint8_t* data, size_t dataSize);
 
     /**
      * @brief Receive data from USB.
@@ -119,15 +120,14 @@ class USB {
      */
     static void serialPortState(int itf, cdcacm_event_t* event);
 
-    static bool serialIsOpen;    ///< Flag: is USB serial open
-    bool isInitialized = false;  ///< Initialization status
+    static std::atomic<bool> serialIsOpen;  ///< Flag: is USB serial open (ISR-safe)
+    bool isInitialized = false;             ///< Initialization status
 
     static usbMessage message;                                   ///< Last received message
     static uint8_t rxBuffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];  ///< RX buffer
     static size_t rxSize;                                        ///< Size of data in RX buffer
 
     static const char* TAG;  ///< Log tag
-    bool messeageArived = false;
 
     static tinyusb_cdcacm_itf_t USB_INTERFACE_PORT;  ///< USB CDC interface used
 };

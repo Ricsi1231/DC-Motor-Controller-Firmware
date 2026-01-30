@@ -59,7 +59,9 @@ class CommLogicHandler {
     float targetDegree = 0.0f;              ///< Final target position
     bool settled = false;                   ///< Whether target has been reached
 
-    bool getPIDValuesFirsTime = true;  ///< Initialization flag for PID sync
+    bool getPIDValuesFirstTime = true;  ///< Initialization flag for PID sync
+
+    static constexpr float settledToleranceDeg = 1.0f;  ///< Position tolerance for "reached" detection (degrees)
 
     /**
      * @brief Static task function executed in FreeRTOS context.

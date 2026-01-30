@@ -149,7 +149,7 @@ DRV8876Config DRV8876::getConfig() const { return this->config; };
 
 void DRV8876::setDirection(Direction direction) {
     if (initialized == false) {
-        ESP_LOGE(TAG, "DRV8878 class is not initialized");
+        ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return;
     }
 
@@ -160,7 +160,7 @@ void DRV8876::setDirection(Direction direction) {
 
 void DRV8876::reverseDirection() {
     if (initialized == false) {
-        ESP_LOGE(TAG, "DRV8878 class is not initialized");
+        ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return;
     }
 
@@ -209,7 +209,7 @@ esp_err_t DRV8876::reverseDirectionSafe() {
 
 esp_err_t DRV8876::setSpeed(uint8_t speed) {
     if (initialized == false) {
-        ESP_LOGE(TAG, "DRV8878 class is not initialized");
+        ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return ESP_FAIL;
     }
 
@@ -299,7 +299,7 @@ esp_err_t DRV8876::setSpeed(uint8_t targetPercent, uint32_t rampTimeMs) {
 
 esp_err_t DRV8876::stop() {
     if (initialized == false) {
-        ESP_LOGE(TAG, "DRV8878 class is not initialized");
+        ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return ESP_FAIL;
     }
 
@@ -370,7 +370,7 @@ bool DRV8876::getAndClearFault() { return faultTriggered.exchange(false, std::me
 
 esp_err_t DRV8876::setPwmValue(ledc_timer_bit_t resolution, uint32_t frequency) {
     if (initialized == false) {
-        ESP_LOGE(TAG, "DRV8878 class is not initialized");
+        ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return ESP_FAIL;
     }
 
@@ -451,7 +451,7 @@ void DRV8876::processFaultEvent() {
 
 esp_err_t DRV8876::setPwmDuty(ledc_channel_t pwmChannel, uint8_t duty) {
     if (initialized == false) {
-        ESP_LOGE(TAG, "DRV8878 class is not initialized");
+        ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return ESP_FAIL;
     }
 
