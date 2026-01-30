@@ -8,12 +8,22 @@ using namespace DC_Motor_Controller_Firmware::DRV8876;
 const char *TAG = "MAIN";
 
 extern "C" void app_main() {
-  gpio_num_t PH_PIN = GPIO_NUM_4;
-  gpio_num_t EN_PIN = GPIO_NUM_5;
-  gpio_num_t FAULT_PIN = GPIO_NUM_6;
-  ledc_channel_t PWM_CHANNEL = LEDC_CHANNEL_0;
+  DRV8876Config motorConfig = {
+      .phPin = GPIO_NUM_4,
+      .enPin = GPIO_NUM_5,
+      .nFault = GPIO_NUM_6,
+      .nSleep = GPIO_NUM_7,
+      .pwmChannel = LEDC_CHANNEL_0,
+      .resolution = LEDC_TIMER_10_BIT,
+      .frequency = 20000,
+      .minFrequency = 100,
+      .maxFrequency = 100000,
+      .rampStepPercent = 5,
+      .rampStepDelayMs = 10,
+      .minEffectivePwmPercent = 3,
+  };
 
-  DRV8876 motor(PH_PIN, EN_PIN, FAULT_PIN, PWM_CHANNEL);
+  DRV8876 motor(motorConfig);
   motor.init();
 
   while (1) {

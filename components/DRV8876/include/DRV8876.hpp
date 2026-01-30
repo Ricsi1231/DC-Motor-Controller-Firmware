@@ -4,12 +4,14 @@
  *
  * Provides high-level interface for controlling a DC motor using the DRV8876
  * H-bridge driver via ESP32 GPIO and LEDC PWM peripherals.
+ *
+ * Internally delegates to sub-components: GpioController, FaultHandler,
+ * PwmController, and MotionRamp.
  */
 
 #pragma once
 
 #include <inttypes.h>
-#include <atomic>
 #include <functional>
 
 #include "esp_log.h"
@@ -19,6 +21,11 @@
 
 #include "driver/gpio.h"
 #include "driver/ledc.h"
+
+#include "FaultHandler.hpp"
+#include "GpioController.hpp"
+#include "MotionRamp.hpp"
+#include "PwmController.hpp"
 
 namespace DC_Motor_Controller_Firmware {
 namespace DRV8876 {
@@ -57,11 +64,7 @@ class DRV8876 {
     /**
      * @brief Constructor for DRV8876 class.
      *
-     * @param phPin GPIO for PH (direction control)
-     * @param enPin GPIO for EN (PWM enable)
-     * @param nFault GPIO for nFAULT signal (active low fault flag)
-     * @param nSleep GPIO for driver sleep mode (need active high to enable the driver)
-     * @param pwmChannel LEDC channel used for PWM
+     * @param config Configuration structure with pin assignments and PWM parameters.
      */
     DRV8876(const DRV8876Config& config);
 
@@ -298,111 +301,25 @@ class DRV8876 {
     void processFaultEvent();
 
   private:
-    /**
-     * @brief Set PWM duty cycle based on speed (0–100%).
-     *
-     * @param pwmChannel LEDC channel
-     * @param duty Duty in percentage
-     * @return esp_err_t ESP_OK if success.
-     */
-    esp_err_t setPwmDuty(ledc_channel_t pwmChannel, uint8_t duty);
-
-    /**
-     * @brief Set PWM duty cycle directly in timer ticks.
-     *
-     * Writes the specified number of ticks to the LEDC channel’s
-     * duty register. Use this when precise tick-level control is required.
-     *
-     * @param pwmChannel LEDC channel to configure.
-     * @param ticks Number of ticks corresponding to desired duty cycle.
-     * @return esp_err_t ESP_OK if successful, or error code otherwise.
-     */
-    esp_err_t setPwmDutyTicks(ledc_channel_t pwmChannel, uint32_t ticks);
-
-    /**
-     * @brief Convert duty percentage (0–100%) into timer ticks.
-     *
-     * Calculates the equivalent tick value for a given duty percentage
-     * based on the current LEDC timer configuration.
-     *
-     * @param percent Duty cycle in percentage (0–100).
-     * @return uint32_t Number of ticks corresponding to the percentage.
-     */
-    uint32_t percentToTicks(uint8_t percent);
-
-    /**
-     * @brief Gradually change motor speed to a target percentage.
-     *
-     * This function ramps the current motor speed up or down toward the
-     * specified target, using step size and delay values configured in
-     * DRV8876Config (rampStepPercent and rampStepDelayMs).
-     *
-     * - If the target speed is higher than the current speed, the motor will
-     *   accelerate in increments until it reaches the target.
-     * - If the target speed is lower, the motor will decelerate gradually down
-     *   to the target.
-     *
-     * @param targetPercent Desired motor speed in percent [0–100].
-     * @return esp_err_t ESP_OK if successful, or error code if setting PWM fails.
-     */
-    esp_err_t rampTo(uint8_t targetPercent);
-
-    /**
-     * @brief Acquire exclusive access to the LEDC peripheral.
-     *
-     * Attempts to lock the internal LEDC mutex within the specified timeout.
-     * Ensures that only one task can configure or update LEDC resources
-     * related to this driver at a time.
-     *
-     * @param timeoutMs Timeout in milliseconds to wait for the lock.
-     *                  Use portMAX_DELAY for indefinite wait.
-     * @return true if the lock was successfully acquired, false on timeout or error.
-     */
-    bool lockLedc(uint32_t timeoutMs);
-
-    /**
-     * @brief Release previously acquired LEDC lock.
-     *
-     * Should be called after finishing LEDC operations
-     * to allow other tasks to access the peripheral.
-     */
-    void unlockLedc();
-
-    /**
-     * @brief ISR for handling fault interrupt.
-     *
-     * @param arg Pointer to DRV8876 instance.
-     */
-    static IRAM_ATTR void faultISR(void* arg);
-
     DRV8876Config config;  ///< Config for DRV8876 motor driver
+
+    GpioController gpio;     ///< GPIO pin management
+    PwmController pwm;       ///< PWM/LEDC management
+    FaultHandler fault;      ///< Fault detection and callback
+    MotionRamp ramp;         ///< Speed ramping logic
 
     Direction motorDirection;  ///< Current motor direction
     uint8_t motorSpeed;        ///< Current speed (0–100)
 
-    std::atomic_bool faultTriggered{false};  ///< Fault flag
-
     const uint8_t minMotorSpeed = 0;    ///< Min motor speed
     const uint8_t maxMotorSpeed = 100;  ///< Max motor speed
+    const uint8_t motorStop = 0;        ///< Constant for stop signal
 
-    const uint32_t MIN_PWM_FREQ = 1000;   ///< Minimum PWM frequency allowed
-    const uint32_t MAX_PWM_FREQ = 30000;  ///< Maximum PWM frequency allowed
-
-    uint32_t maxDuty = 0;  ///< Maximum duty cycle value in timer ticks
-
-    const uint8_t motorStop = 0;  ///< Constant for stop signal
-
-    uint8_t previousSpeedValue = 0;
-
-    bool initialized = false;  ///< DRV class initialized flag
-
-    bool enableMotorStopedLog = true;
+    uint8_t previousSpeedValue = 0;    ///< Previous speed for log suppression
+    bool initialized = false;          ///< DRV class initialized flag
+    bool enableMotorStopedLog = true;  ///< Log suppression for stop events
 
     static constexpr char TAG[] = "DRV8876";  ///< Logging tag
-
-    SemaphoreHandle_t ledcMutex = nullptr;  ///< Mutex for synchronizing LEDC access
-    uint32_t ledcMutexTimeoutMs = 50;       ///< Default timeout (ms) when waiting for LEDC mutex
-    std::function<void()> faultCallback;    ///< User-defined callback invoked on fault events
 };
 
 }  // namespace DRV8876

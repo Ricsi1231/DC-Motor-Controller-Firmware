@@ -30,7 +30,12 @@ constexpr DRV8876Config motorConfig{.phPin = PH_PIN,
                                     .nSleep = SLEEP_PIN,
                                     .pwmChannel = LEDC_CHANNEL_0,
                                     .resolution = LEDC_TIMER_10_BIT,
-                                    .frequency = 20000};
+                                    .frequency = 20000,
+                                    .minFrequency = 100,
+                                    .maxFrequency = 100000,
+                                    .rampStepPercent = 5,
+                                    .rampStepDelayMs = 10,
+                                    .minEffectivePwmPercent = 3};
 
 constexpr pcnt_unit_config_t unitCfg{.low_limit = -32767, .high_limit = 32767, .intr_priority = 0, .flags = {.accum_count = true}};
 

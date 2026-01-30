@@ -53,12 +53,41 @@ void encoderSimulation(int steps, int delay_us = 1000,
 }
 
 extern "C" void app_main() {
-  pcnt_unit_config_t pcntUnit = {};
-  pcntUnit.high_limit = 1000;
-  pcntUnit.low_limit = -1000;
-  pcntUnit.flags.accum_count = true;
+  constexpr pcnt_unit_config_t unitCfg = {
+      .low_limit = -1000,
+      .high_limit = 1000,
+      .intr_priority = 0,
+      .flags = {.accum_count = true}};
 
-  Encoder encoder(GPIO_NUM_1, GPIO_NUM_2, pcntUnit, 1024);
+  constexpr SpeedFilterConfig speedFilterCfg = {
+      .filterType = SpeedFilterType::EMA,
+      .emaAlpha = 0.3f,
+      .iirCutoffHz = 2.0f,
+      .sampleRateHz = 100};
+
+  constexpr DirectionConfig directionCfg = {
+      .hysteresisThreshold = 8,
+      .debounceTimeMs = 100,
+      .enableHysteresis = true};
+
+  constexpr EncoderConfig encCfg = {
+      .pinA = GPIO_NUM_1,
+      .pinB = GPIO_NUM_2,
+      .unitConfig = unitCfg,
+      .pulsesPerRevolution = 1024,
+      .filterThresholdNs = 1000,
+      .rpmCalcPeriodUs = 100000,
+      .maxRpm = 5000,
+      .enableWatchPoint = true,
+      .watchLowLimit = 0,
+      .watchHighLimit = 0,
+      .openCollectorInputs = false,
+      .rpmBlendThreshold = 10,
+      .rpmBlendBand = 3,
+      .speedFilter = speedFilterCfg,
+      .direction = directionCfg};
+
+  Encoder encoder(encCfg);
   initEncoderSimulation();
 
   esp_err_t err = encoder.init();
@@ -68,28 +97,34 @@ extern "C" void app_main() {
     return;
   }
 
+  err = encoder.start();
+
+  if (err != ESP_OK) {
+    ESP_LOGE("ENCODER", "Failed to start encoder");
+    return;
+  }
+
   while (true) {
     encoderSimulation(ENCODER_STEPS, ENCODER_DELAY, BACKWARD);
 
-    uint32_t ticks = encoder.getPositionTicks();
+    int32_t ticks = encoder.getPositionTicks();
     float degrees = encoder.getPositionInDegrees();
-    int32_t rpm = encoder.getPositionInRPM();
+    int32_t rpm = encoder.getRpmRounded();
 
-    ESP_LOGI("ENCODER", "Ticks: %lu, Degrees: %.2f, RPM: %ld", ticks, degrees,
+    ESP_LOGI("ENCODER", "Ticks: %ld, Degrees: %.2f, RPM: %ld", ticks, degrees,
              rpm);
 
     if (simulationTime == 10) {
-      ESP_LOGI("ENCODER", "Reset Postion");
-      encoder.resetPositon();
+      ESP_LOGI("ENCODER", "Reset Position");
+      encoder.resetPosition();
 
       simulationTime = 0;
     }
 
-    if (encoder.getMotorDriection() ==
-        DC_Motor_Controller_Firmware::Encoder::motorDirection::LEFT) {
-      ESP_LOGI("ENCODER", "Motor rotiting to left");
+    if (encoder.getMotorDirection() == motorDirection::LEFT) {
+      ESP_LOGI("ENCODER", "Motor rotating to left");
     } else {
-      ESP_LOGI("ENCODER", "Motor rotiting to right");
+      ESP_LOGI("ENCODER", "Motor rotating to right");
     }
 
     simulationTime++;
