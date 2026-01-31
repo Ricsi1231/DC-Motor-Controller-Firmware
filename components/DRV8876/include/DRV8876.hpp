@@ -66,7 +66,7 @@ class DRV8876 {
      *
      * @param config Configuration structure with pin assignments and PWM parameters.
      */
-    DRV8876(const DRV8876Config& config);
+    explicit DRV8876(const DRV8876Config& config);
 
     /**
      * @brief Destructor.
