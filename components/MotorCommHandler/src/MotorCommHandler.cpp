@@ -1,4 +1,7 @@
 #include "MotorCommHandler.hpp"
+#include "Encoder.hpp"
+#include "motorControl.hpp"
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -6,7 +9,8 @@
 
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
-MotorCommHandler::MotorCommHandler(USB::USB& usbRef) : usb(usbRef) {}
+MotorCommHandler::MotorCommHandler(USB::USB& usbRef, Control::MotorController* motorPtr, Encoder::Encoder* encoderPtr)
+    : usb(usbRef), motor(motorPtr), encoder(encoderPtr) {}
 
 MotorCommHandler::~MotorCommHandler() {}
 
@@ -28,9 +32,54 @@ void MotorCommHandler::startTask() {
 
 void MotorCommHandler::commTaskWrapper(void* param) {
     auto* self = static_cast<MotorCommHandler*>(param);
+
+    if (self->motor != nullptr && self->encoder != nullptr && self->getPIDValuesFirstTime) {
+        self->motor->getPID(self->logicKp, self->logicKi, self->logicKd);
+        self->getPIDValuesFirstTime = false;
+    }
+
     while (true) {
         self->process();
+        self->processApplicationLogic();
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+void MotorCommHandler::processApplicationLogic() {
+    if (motor == nullptr || encoder == nullptr) return;
+
+    currentPos = encoder->getPositionInDegrees();
+
+    if (isNewTargetReceived()) {
+        offset = getTargetDegrees();
+        targetDegree = currentPos + offset;
+        motor->setTarget(targetDegree);
+        clearTarget();
+        settled = false;
+    }
+
+    if (isNewPIDReceived()) {
+        getPIDParams(logicKp, logicKi, logicKd);
+        motor->setPID(logicKp, logicKi, logicKd);
+    }
+
+    if (wasPIDRequested()) {
+        if (isUSBOpen()) {
+            motor->getPID(logicKp, logicKi, logicKd);
+            esp_err_t res = sendPIDParams(logicKp, logicKi, logicKd);
+            if (res != ESP_OK) {
+                clearPIDRequest();
+            }
+        } else {
+            clearPIDRequest();
+        }
+    }
+
+    if ((fabsf(encoder->getPositionInDegrees() - targetDegree) <= settledToleranceDeg) && !settled) {
+        if (isUSBOpen()) {
+            notifyMotorPositionReached();
+        }
+        settled = true;
     }
 }
 

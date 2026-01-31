@@ -4,7 +4,8 @@
  *
  * Handles incoming serial commands (target position, PID params,
  * enable/disable, etc.) and sends feedback (motor reached, current position,
- * etc.) using the USB interface.
+ * etc.) using the USB interface. Optionally integrates application-level
+ * logic when a MotorController and Encoder are provided.
  */
 
 #pragma once
@@ -17,19 +18,32 @@
 #include "freertos/task.h"
 
 namespace DC_Motor_Controller_Firmware {
+namespace Control {
+class MotorController;
+}
+namespace Encoder {
+class Encoder;
+}
+
 namespace Communication {
 
 /**
  * @class MotorCommHandler
  * @brief Parses and manages motor-related USB communication commands.
+ *
+ * When constructed with optional MotorController and Encoder pointers,
+ * also handles closed-loop application logic (target setting, PID tuning,
+ * motion-done notification).
  */
 class MotorCommHandler {
   public:
     /**
      * @brief Constructor.
      * @param usbRef Reference to the initialized USB communication interface.
+     * @param motor Optional pointer to the motor controller for application logic.
+     * @param enc Optional pointer to the encoder for position feedback.
      */
-    explicit MotorCommHandler(USB::USB& usbRef);
+    explicit MotorCommHandler(USB::USB& usbRef, Control::MotorController* motorPtr = nullptr, Encoder::Encoder* encoderPtr = nullptr);
 
     /**
      * @brief Destructor.
@@ -154,6 +168,20 @@ class MotorCommHandler {
     bool stopRequested = false;  ///< Flag: STOP command received
     bool motorEnabled = true;    ///< Flag: motor is enabled or disabled
 
+    Control::MotorController* motor = nullptr;  ///< Optional motor controller for application logic
+    Encoder::Encoder* encoder = nullptr;        ///< Optional encoder for position feedback
+
+    float logicKp = 0.0f;        ///< Cached PID kp for application logic
+    float logicKi = 0.0f;        ///< Cached PID ki for application logic
+    float logicKd = 0.0f;        ///< Cached PID kd for application logic
+    float currentPos = 0.0f;     ///< Current encoder position in degrees
+    float offset = 0.0f;         ///< Target offset received from USB
+    float targetDegree = 0.0f;   ///< Computed absolute target in degrees
+    bool settled = false;         ///< Flag: motor has settled at target
+    bool getPIDValuesFirstTime = true;  ///< Flag: initial PID value read pending
+
+    static constexpr float settledToleranceDeg = 1.0f;  ///< Position tolerance for settled detection
+
     /**
      * @brief Parses incoming USB message strings and updates internal state.
      * @param msg Null-terminated message string.
@@ -161,12 +189,18 @@ class MotorCommHandler {
     void parseMessage(const char* msg);
 
     /**
+     * @brief Processes application logic (target, PID, settle detection).
+     *
+     * Only runs when motor and encoder are non-null.
+     */
+    void processApplicationLogic();
+
+    /**
      * @brief Static FreeRTOS task wrapper for the communication loop.
      * @param param Pointer to MotorCommHandler instance.
      */
     static void commTaskWrapper(void* param);
 
-    // Command Identifiers
     static constexpr const char* MSG_SET_DEG = "SET_DEG:";
     static constexpr const char* MSG_SET_PID = "SET_PID:";
     static constexpr const char* MSG_GET_PID = "GET_PID";

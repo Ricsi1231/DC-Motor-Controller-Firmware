@@ -9,13 +9,11 @@
  * - USB CDC communication interface
  * - Motor command handler (MotorCommHandler)
  * - High-level control logic (MotorController)
- * - Application logic bridge (CommLogicHandler)
  *
  * This file configures the firmware's runtime behavior by starting
- * FreeRTOS tasks for communication, control, and logic orchestration.
+ * FreeRTOS tasks for communication and control.
  */
 
-#include "CommLogicHandler.hpp"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
@@ -35,17 +33,15 @@ using namespace DC_Motor_Controller_Firmware::USB;
 using namespace DC_Motor_Controller_Firmware::Communication;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
-using namespace DC_Motor_Controller_Firmware::Logic;
 
 const char* TAG = "MAIN APP";
 
 USB usb;
-MotorCommHandler motorComm(usb);
 DRV8876 motor(motorConfig);
 Encoder encoder(encoderConfig);
 PIDController pid(defaultConfig);
 MotorController motorControl(encoder, motor, pid, motorCfg);
-CommLogicHandler commLogic(motorComm, motorControl, encoder);
+MotorCommHandler motorComm(usb, &motorControl, &encoder);
 
 esp_err_t errorStatus = ESP_OK;
 
@@ -67,5 +63,4 @@ extern "C" void app_main() {
 
     motorComm.startTask();
     motorControl.startTask();
-    commLogic.startTask();
 }
