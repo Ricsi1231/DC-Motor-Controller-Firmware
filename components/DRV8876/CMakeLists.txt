@@ -5,5 +5,5 @@ idf_component_register(
          "src/PwmController.cpp"
          "src/MotionRamp.cpp"
     INCLUDE_DIRS "include"
-    REQUIRES esp_driver_ledc esp_driver_gpio
+    REQUIRES esp_driver_ledc esp_driver_gpio Interfaces
 )

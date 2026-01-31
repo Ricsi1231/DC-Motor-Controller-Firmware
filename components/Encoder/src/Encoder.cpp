@@ -406,7 +406,7 @@ int32_t Encoder::getRpmRounded() const noexcept {
     return rounded;
 }
 
-motorDirection Encoder::getMotorDirection() const noexcept {
+EncoderDirection Encoder::getMotorDirection() const noexcept {
     if (!initialized || !encoderConfig.direction.enableHysteresis) {
         ESP_LOGD(TAG, "Using raw direction (not init or hysteresis disabled)");
         return getMotorDirectionRaw();
@@ -431,7 +431,7 @@ motorDirection Encoder::getMotorDirection() const noexcept {
     return dir;
 }
 
-motorDirection Encoder::getMotorDirectionRaw() const noexcept {
+EncoderDirection Encoder::getMotorDirectionRaw() const noexcept {
     const float rpm = getRpm();
     motorDirection dir = (rpm < 0.0f) ? motorDirection::LEFT : motorDirection::RIGHT;
     ESP_LOGD(TAG, "Raw motor direction: %s (RPM=%.2f)", dir == motorDirection::LEFT ? "LEFT" : "RIGHT", rpm);

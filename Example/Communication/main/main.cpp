@@ -1,5 +1,4 @@
 #include "MotorCommHandler.hpp"
-#include "USB.hpp"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -7,8 +6,7 @@
 using namespace DC_Motor_Controller_Firmware;
 using namespace DC_Motor_Controller_Firmware::Communication;
 
-static USB::USB usb;
-static MotorCommHandler motorComm(usb);
+static MotorCommHandler motorComm;
 
 float target = 0;
 float lastTarget = 1.0f;
@@ -16,7 +14,11 @@ float lastTarget = 1.0f;
 float kp, ki, kd;
 
 extern "C" void app_main() {
-    usb.init();
+    esp_err_t err = motorComm.init();
+    if (err != ESP_OK) {
+        ESP_LOGE("MAIN", "MotorCommHandler init failed: %s", esp_err_to_name(err));
+        return;
+    }
 
     while (true) {
         motorComm.process();

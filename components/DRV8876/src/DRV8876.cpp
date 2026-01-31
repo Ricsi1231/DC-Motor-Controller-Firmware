@@ -95,7 +95,7 @@ esp_err_t DRV8876::init() {
 
 DRV8876Config DRV8876::getConfig() const { return config; }
 
-void DRV8876::setDirection(Direction direction) {
+void DRV8876::setDirection(MotorDirection direction) {
     if (initialized == false) {
         ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return;
@@ -103,7 +103,7 @@ void DRV8876::setDirection(Direction direction) {
 
     motorDirection = direction;
     gpio.setDirection(static_cast<bool>(motorDirection));
-    ESP_LOGI(TAG, "Direction=%s", motorDirection == Direction::LEFT ? "LEFT" : "RIGHT");
+    ESP_LOGI(TAG, "Direction=%s", motorDirection == MotorDirection::LEFT ? "LEFT" : "RIGHT");
 }
 
 void DRV8876::reverseDirection() {
@@ -112,12 +112,12 @@ void DRV8876::reverseDirection() {
         return;
     }
 
-    motorDirection = (motorDirection == Direction::LEFT) ? Direction::RIGHT : Direction::LEFT;
+    motorDirection = (motorDirection == MotorDirection::LEFT) ? MotorDirection::RIGHT : MotorDirection::LEFT;
     gpio.setDirection(static_cast<bool>(motorDirection));
-    ESP_LOGI(TAG, "Direction reversed -> %s", motorDirection == Direction::LEFT ? "LEFT" : "RIGHT");
+    ESP_LOGI(TAG, "Direction reversed -> %s", motorDirection == MotorDirection::LEFT ? "LEFT" : "RIGHT");
 }
 
-esp_err_t DRV8876::setDirectionSafe(Direction newDirection) {
+esp_err_t DRV8876::setDirectionSafe(MotorDirection newDirection) {
     if (initialized == false) {
         ESP_LOGE(TAG, "DRV8876 class is not initialized");
         return ESP_FAIL;
@@ -152,7 +152,7 @@ esp_err_t DRV8876::reverseDirectionSafe() {
         return ESP_FAIL;
     }
 
-    Direction reversedDirection = (motorDirection == Direction::LEFT) ? Direction::RIGHT : Direction::LEFT;
+    MotorDirection reversedDirection = (motorDirection == MotorDirection::LEFT) ? MotorDirection::RIGHT : MotorDirection::LEFT;
     return setDirectionSafe(reversedDirection);
 }
 
@@ -267,7 +267,7 @@ esp_err_t DRV8876::brake() {
 
 uint8_t DRV8876::getMotorSpeed() const { return motorSpeed; }
 
-Direction DRV8876::getMotorDirection() const { return motorDirection; }
+MotorDirection DRV8876::getMotorDirection() const { return motorDirection; }
 
 bool DRV8876::motorIsRunning() const { return motorSpeed > 0; }
 

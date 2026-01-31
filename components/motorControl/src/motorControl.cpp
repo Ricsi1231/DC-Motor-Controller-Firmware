@@ -7,8 +7,12 @@
 using namespace DC_Motor_Controller_Firmware;
 using namespace Control;
 
-MotorController::MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pidRef, const MotorControllerConfig& initialConfig)
-    : encoder(enc), motor(drv), pid(pidRef), config(initialConfig) {
+MotorController::MotorController(const DRV8876::DRV8876Config& motorCfg, const Encoder::EncoderConfig& encCfg, const PID::PidConfig& pidCfg,
+                                 const MotorControllerConfig& initialConfig)
+    : motor(std::make_unique<DRV8876::DRV8876>(motorCfg)),
+      encoder(std::make_unique<Encoder::Encoder>(encCfg)),
+      pid(std::make_unique<PID::PIDController>(pidCfg)),
+      config(initialConfig) {
     ESP_LOGI(TAG, "Ctor: creating mutexes");
     targetMutex = xSemaphoreCreateMutex();
     if (targetMutex == nullptr) {
@@ -41,9 +45,9 @@ MotorController::~MotorController() {
 }
 
 MotorController::MotorController(MotorController&& other) noexcept
-    : encoder(other.encoder),
-      motor(other.motor),
-      pid(other.pid),
+    : motor(std::move(other.motor)),
+      encoder(std::move(other.encoder)),
+      pid(std::move(other.pid)),
       config(other.config),
       profiler(other.profiler),
       settleDetector(other.settleDetector),
@@ -90,6 +94,37 @@ MotorController::MotorController(MotorController&& other) noexcept
     ESP_LOGI(TAG, "Move Ctor done");
 }
 
+esp_err_t MotorController::init() {
+    esp_err_t err = motor->init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Motor init failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = encoder->init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Encoder init failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = encoder->start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Encoder start failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "Init done");
+    return ESP_OK;
+}
+
+IEncoder* MotorController::getEncoder() const { return encoder.get(); }
+
+IMotorDriver* MotorController::getMotor() const { return motor.get(); }
+
+IPIDController* MotorController::getPid() const { return pid.get(); }
+
+IMotorController* MotorController::getMotorControl() { return this; }
+
 void MotorController::resetMotionState(uint64_t nowUs) {
     profiler.reset(nowUs);
     settleDetector.reset();
@@ -110,12 +145,12 @@ void MotorController::setTargetDegrees(float degrees) {
         ESP_LOGW(TAG, "setTargetDegrees without mutex");
     }
 
-    pid.reset();
+    pid->reset();
 
     uint64_t nowUs = static_cast<uint64_t>(esp_timer_get_time());
 
     motionDone.store(false, std::memory_order_relaxed);
-    lastPos = encoder.getPositionInDegrees();
+    lastPos = encoder->getPositionInDegrees();
     resetMotionState(nowUs);
     motionGuard.startMotion(nowUs);
 
@@ -179,7 +214,7 @@ void MotorController::stopTask() {
 
 void MotorController::stop() {
     ESP_LOGI(TAG, "Stop called");
-    motor.stop();
+    motor->stop();
     motionDone.store(true, std::memory_order_relaxed);
     resetMotionState(0);
 }
@@ -224,11 +259,11 @@ void MotorController::taskFunc(void* param) {
 }
 
 void MotorController::setPID(float kp, float ki, float kd) {
-    pid.setParameters(kp, ki, kd);
+    pid->setParameters(kp, ki, kd);
     ESP_LOGI(TAG, "PID set: Kp=%.4f Ki=%.4f Kd=%.4f", kp, ki, kd);
 }
 
-void MotorController::getPID(float& kp, float& ki, float& kd) { pid.getParameters(kp, ki, kd); }
+void MotorController::getPID(float& kp, float& ki, float& kd) { pid->getParameters(kp, ki, kd); }
 
 void MotorController::setConfig(const MotorControllerConfig& newConfig) {
     if (configMutex != nullptr && xSemaphoreTake(configMutex, portMAX_DELAY) == pdTRUE) {
@@ -470,7 +505,7 @@ void MotorController::update() {
         ESP_LOGW(TAG, "update: target read without mutex");
     }
 
-    float currentPos = encoder.getPositionInDegrees();
+    float currentPos = encoder->getPositionInDegrees();
     if (hit(lastStateLogUs, nowUs, 500)) {
         ESP_LOGD(TAG, "update: t=%llu us, tgt=%.3f pos=%.3f", (unsigned long long)nowUs, currentTarget, currentPos);
     }
@@ -492,7 +527,7 @@ void MotorController::update() {
     MotorControllerConfig cfg = getConfig();
 
     if (motionGuard.isTimedOut(nowUs, cfg.guard)) {
-        motor.stop();
+        motor->stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onStallCb) {
             MotorStatus s0 = getStatus();
@@ -502,7 +537,7 @@ void MotorController::update() {
         return;
     }
 
-    float pidSignal = pid.compute(currentTarget, currentPos);
+    float pidSignal = pid->compute(currentTarget, currentPos);
     pidSignal = clampToPercentRange(pidSignal);
     lastPidOut = pidSignal;
 
@@ -523,7 +558,7 @@ void MotorController::update() {
     float combined = clampToPercentRange(pidSignal + ff);
 
     if (softLimiter.isBlocked(combined, currentPos)) {
-        motor.stop();
+        motor->stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onLimitHitCb) {
             MotorStatus s1 = getStatus();
@@ -555,7 +590,7 @@ void MotorController::update() {
 
     bool pidIsSettled = false;
     if (!stallDetector.isWarming()) {
-        pidIsSettled = pid.isSettled();
+        pidIsSettled = pid->isSettled();
     }
     StallDetector::Result stallResult = stallDetector.update(dpos, errAbs, pidIsSettled, cfg.stall);
 
@@ -570,7 +605,7 @@ void MotorController::update() {
 
     if (settled) {
         ESP_LOGI(TAG, "motion DONE: settleCnt=%d", settleDetector.getCount());
-        motor.stop();
+        motor->stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onMotionDoneCb) {
             MotorStatus s2 = getStatus();
@@ -582,7 +617,7 @@ void MotorController::update() {
     }
 
     if (stallResult == StallDetector::Result::STALLED) {
-        motor.stop();
+        motor->stop();
         float finalDriftAbs = fabsf(currentTarget - currentPos);
         bool doneOk = (finalDriftAbs <= MotionGuard::getDriftDeadband(cfg.guard));
         motionDone.store(doneOk, std::memory_order_relaxed);
@@ -604,12 +639,12 @@ void MotorController::update() {
         speedPct = cfg.maxSpeed;
     }
 
-    DRV8876::Direction dir = DRV8876::Direction::RIGHT;
+    MotorDirection dir = MotorDirection::RIGHT;
     if (slewOut < 0.0f) {
-        dir = DRV8876::Direction::LEFT;
+        dir = MotorDirection::LEFT;
     }
-    motor.setDirection(dir);
-    motor.setSpeed(speedPct);
+    motor->setDirection(dir);
+    motor->setSpeed(speedPct);
 
     if (hit(lastCmdLogUs, nowUs, 250)) {
         const char* dirStr = (slewOut < 0.0f) ? "LEFT" : "RIGHT";
@@ -635,7 +670,7 @@ MotorStatus MotorController::getStatus() const {
         currentTarget = target;
     }
 
-    float currentPos = encoder.getPositionInDegrees();
+    float currentPos = encoder->getPositionInDegrees();
 
     status.target = currentTarget;
     status.position = currentPos;

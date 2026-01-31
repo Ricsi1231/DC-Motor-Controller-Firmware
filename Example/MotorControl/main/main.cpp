@@ -81,10 +81,7 @@ constexpr MotorControllerConfig motorCfg = {
     .stall = {.stuckPositionEpsilon = 0.1f, .stuckCountLimit = 30, .pidWarmupLimit = 15, .minErrorToMove = 0.3f},
     .guard = {.motionTimeoutMs = 5000, .driftDeadband = 0.8f, .driftHysteresis = 0.4f}};
 
-DRV8876 motor(motorConfig);
-Encoder encoder(encCfg);
-PIDController pid(pidConfig);
-MotorController motorController(encoder, motor, pid, motorCfg);
+MotorController motorController(motorConfig, encCfg, pidConfig, motorCfg);
 
 struct ExampleState {
     int currentSequenceStep = 0;
@@ -325,24 +322,9 @@ void demoSequenceTask(void* param) {
 extern "C" void app_main() {
     ESP_LOGI(TAG, "Initializing motor controller example");
 
-    esp_err_t result = encoder.init();
+    esp_err_t result = motorController.init();
     if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize encoder: %s", esp_err_to_name(result));
-        return;
-    }
-
-    result = encoder.start();
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start encoder: %s", esp_err_to_name(result));
-        return;
-    }
-
-    encoder.setInverted(false);
-    encoder.setGearRatio(1.0f);
-
-    result = motor.init();
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize motor: %s", esp_err_to_name(result));
+        ESP_LOGE(TAG, "Failed to initialize motor controller: %s", esp_err_to_name(result));
         return;
     }
 

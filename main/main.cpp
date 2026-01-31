@@ -1,66 +1,38 @@
-/**
- * @file main.cpp
- * @brief Entry point for the DC Motor Controller firmware.
- *
- * Initializes all hardware components and starts the control tasks:
- * - DRV8876 motor driver
- * - Quadrature encoder via PCNT
- * - PID controller
- * - USB CDC communication interface
- * - Motor command handler (MotorCommHandler)
- * - High-level control logic (MotorController)
- *
- * This file configures the firmware's runtime behavior by starting
- * FreeRTOS tasks for communication and control.
- */
-
-#include "DRV8876.hpp"
-#include "Encoder.hpp"
 #include "MotorCommHandler.hpp"
-#include "PID.hpp"
 #include "PeripheralSettings.hpp"
-#include "USB.hpp"
-#include "esp_log.h"
-#include "esp_timer.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "math.h"
 #include "motorControl.hpp"
 
-using namespace DC_Motor_Controller_Firmware::DRV8876;
-using namespace DC_Motor_Controller_Firmware::Encoder;
-using namespace DC_Motor_Controller_Firmware::USB;
-using namespace DC_Motor_Controller_Firmware::Communication;
-using namespace DC_Motor_Controller_Firmware::PID;
-using namespace DC_Motor_Controller_Firmware::Control;
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include <memory>
+
+using namespace DC_Motor_Controller_Firmware;
 
 const char* TAG = "MAIN APP";
 
-USB usb;
-DRV8876 motor(motorConfig);
-Encoder encoder(encoderConfig);
-PIDController pid(defaultConfig);
-MotorController motorControl(encoder, motor, pid, motorCfg);
-MotorCommHandler motorComm(usb, &motorControl, &encoder);
-
-esp_err_t errorStatus = ESP_OK;
+std::unique_ptr<Control::MotorController> motorControl;
+std::unique_ptr<Communication::MotorCommHandler> motorComm;
 
 extern "C" void app_main() {
-    errorStatus = motor.init();
-    if (errorStatus != ESP_OK) {
-        ESP_LOGD(TAG, "Error with motor init");
+    motorControl = std::make_unique<Control::MotorController>(motorConfig, encoderConfig, defaultConfig, motorCfg);
+
+    esp_err_t err = motorControl->init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "MotorController init failed: %s", esp_err_to_name(err));
+        return;
     }
 
-    errorStatus = encoder.init();
-    if (errorStatus != ESP_OK) {
-        ESP_LOGD(TAG, "Error with encoder init");
+    motorComm = std::make_unique<Communication::MotorCommHandler>(motorControl->getMotorControl(), motorControl->getEncoder());
+
+    err = motorComm->init();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "MotorCommHandler init failed: %s", esp_err_to_name(err));
+        return;
     }
 
-    errorStatus = usb.init();
-    if (errorStatus != ESP_OK) {
-        ESP_LOGD(TAG, "Error with USB init");
-    }
+    motorComm->startTask();
+    motorControl->startTask();
 
-    motorComm.startTask();
-    motorControl.startTask();
+    ESP_LOGI(TAG, "System initialized and running");
 }

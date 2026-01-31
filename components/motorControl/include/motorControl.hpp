@@ -10,11 +10,15 @@
 
 #pragma once
 
+#include "IMotorController.hpp"
+#include "IMotorDriver.hpp"
+#include "IEncoder.hpp"
+#include "IPIDController.hpp"
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
+#include "PID.hpp"
 #include "MotionGuard.hpp"
 #include "MotionProfiler.hpp"
-#include "PID.hpp"
 #include "SettleDetector.hpp"
 #include "SoftLimiter.hpp"
 #include "StallDetector.hpp"
@@ -26,8 +30,11 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 
 namespace DC_Motor_Controller_Firmware::Control {
+
+using MotorStatus = DC_Motor_Controller_Firmware::MotorStatus;
 
 /**
  * @struct MotorControllerConfig
@@ -49,27 +56,6 @@ struct MotorControllerConfig {
 };
 
 /**
- * @struct MotorStatus
- * @brief Snapshot of controller state for monitoring and debugging.
- *
- * Units:
- * - target / position / error: degrees
- * - velocity: degrees per second (estimated)
- * - pidOutput: raw PID output (same scale as used by motor command mapping)
- * - stuckCount: update-cycle count accumulated by stuck detection
- * - motionDone: true if controller considers motion settled/complete
- */
-struct MotorStatus {
-    float target;     ///< Current target position (deg).
-    float position;   ///< Current measured position (deg).
-    float error;      ///< target - position (deg).
-    float velocity;   ///< Estimated angular velocity (deg/s).
-    float pidOutput;  ///< Last computed PID output value.
-    int stuckCount;   ///< Current stuck counter value.
-    bool motionDone;  ///< True if motion is complete.
-};
-
-/**
  * @class MotorController
  * @brief Controls a DC motor using encoder feedback and PID regulation.
  *
@@ -78,25 +64,52 @@ struct MotorStatus {
  * Delegates sub-tasks to MotionProfiler, SettleDetector, StallDetector,
  * SoftLimiter, and MotionGuard sub-components.
  */
-class MotorController {
+class MotorController : public IMotorController {
   public:
     /**
-     * @brief Constructor for the motor controller.
-     *
-     * @param enc Reference to Encoder instance for position feedback.
-     * @param drv Reference to DRV8876 motor driver for motor commands.
-     * @param pid Reference to PID controller for error-driven regulation.
+     * @brief Constructor. Creates motor driver, encoder, and PID controller internally.
+     * @param motorCfg DRV8876 motor driver configuration.
+     * @param encCfg Encoder configuration.
+     * @param pidCfg PID controller configuration.
      * @param cfg Optional control parameters (default config used if omitted).
      */
-    MotorController(Encoder::Encoder& enc, DRV8876::DRV8876& drv, PID::PIDController& pid, const MotorControllerConfig& cfg = MotorControllerConfig());
+    MotorController(const DRV8876::DRV8876Config& motorCfg, const Encoder::EncoderConfig& encCfg, const PID::PidConfig& pidCfg,
+                    const MotorControllerConfig& cfg = MotorControllerConfig());
 
     /**
-     * @brief Destructor.
-     *
-     * If the control task is running, it will be deleted automatically.
-     * Stops the motor and releases mutex resources.
+     * @brief Initialize motor driver, encoder, and start encoder.
+     * @return ESP_OK on success, else first error encountered.
      */
-    ~MotorController();
+    esp_err_t init();
+
+    /**
+     * @brief Get pointer to the internal encoder.
+     * @return Non-owning pointer to IEncoder.
+     */
+    IEncoder* getEncoder() const;
+
+    /**
+     * @brief Get pointer to the internal motor driver.
+     * @return Non-owning pointer to IMotorDriver.
+     */
+    IMotorDriver* getMotor() const;
+
+    /**
+     * @brief Get pointer to the internal PID controller.
+     * @return Non-owning pointer to IPIDController.
+     */
+    IPIDController* getPid() const;
+
+    /**
+     * @brief Get pointer to this motor controller as IMotorController.
+     * @return Non-owning pointer to IMotorController.
+     */
+    IMotorController* getMotorControl();
+
+    /**
+     * @brief Destructor. Stops task and motor, releases mutex resources.
+     */
+    ~MotorController() override;
 
     /**
      * @brief Move constructor.
@@ -119,53 +132,36 @@ class MotorController {
 
     /**
      * @brief Starts the FreeRTOS task that handles periodic PID-based motor control.
-     *
-     * Creates a background task using xTaskCreatePinnedToCore() that continuously
-     * calls update(). If the task is already running, this method does nothing.
      */
-    void startTask();
+    void startTask() override;
 
     /**
      * @brief Stop the background control task if running.
-     *
-     * Deletes the FreeRTOS task created by startTask(). If no task is
-     * running, this method does nothing.
      */
-    void stopTask();
+    void stopTask() override;
 
     /**
      * @brief Immediately stop the motor and mark motion as done.
-     *
-     * Stops the motor driver, resets all sub-component state,
-     * and sets motionDone to true.
      */
-    void stop();
+    void stop() override;
 
     /**
      * @brief Set the desired target position in degrees.
-     *
-     * Clamps to soft limits if enforced, resets PID and sub-component state,
-     * and begins a new motion command.
-     *
      * @param degrees New target angle (deg).
      */
-    void setTargetDegrees(float degrees);
+    void setTargetDegrees(float degrees) override;
 
     /**
      * @brief Set the desired target position in encoder ticks.
-     *
-     * Converts ticks to degrees using countsPerRevolution, then delegates
-     * to setTargetDegrees().
-     *
      * @param ticks Target position in raw encoder ticks.
      */
-    void setTargetTicks(int32_t ticks);
+    void setTargetTicks(int32_t ticks) override;
 
     /**
      * @brief Backward-compatible alias for degree-based target setter.
      * @param degrees New target angle (deg).
      */
-    void setTarget(float degrees);
+    void setTarget(float degrees) override;
 
     /**
      * @brief Set PID gain parameters.
@@ -173,7 +169,7 @@ class MotorController {
      * @param ki Integral gain.
      * @param kd Derivative gain.
      */
-    void setPID(float kp, float ki, float kd);
+    void setPID(float kp, float ki, float kd) override;
 
     /**
      * @brief Get the current PID parameters.
@@ -181,7 +177,7 @@ class MotorController {
      * @param ki Output: integral gain.
      * @param kd Output: derivative gain.
      */
-    void getPID(float& kp, float& ki, float& kd);
+    void getPID(float& kp, float& ki, float& kd) override;
 
     /**
      * @brief Update the motor controller configuration at runtime.
@@ -202,33 +198,27 @@ class MotorController {
     MotorControllerConfig getConfig() const;
 
     /**
-     * @brief Run the control logic once.
-     *
-     * Executes the full control pipeline: read encoder, PID compute,
-     * feed-forward, soft limit check, speed mapping, profile shaping,
-     * settle/stall detection, slew-rate limiting, and motor command.
-     * Should be called periodically if not using a background task.
+     * @brief Run the control logic once (full pipeline: encoder, PID, motor command).
      */
-    void update();
+    void update() override;
 
     /**
      * @brief Check if the motor has reached its target and settled.
      * @return true if motion is complete, false otherwise.
      */
-    bool isMotionDone() const;
+    bool isMotionDone() const override;
 
     /**
      * @brief Configure the update loop frequency for the control task.
      * @param hz Desired update rate in Hertz (must be > 0).
      */
-    void setUpdateHz(uint32_t hz);
+    void setUpdateHz(uint32_t hz) override;
 
     /**
      * @brief Get a snapshot of the current motor controller state.
-     * @return MotorStatus containing target, position, error, velocity,
-     *         last PID output, stuck counter, and motion completion flag.
+     * @return MotorStatus containing target, position, error, velocity, PID output, stuck counter, and motion flag.
      */
-    MotorStatus getStatus() const;
+    MotorStatus getStatus() const override;
 
     /**
      * @brief Log the motor status information using ESP-IDF logging at INFO level.
@@ -238,27 +228,23 @@ class MotorController {
 
     /**
      * @brief Set angular soft limits with optional enforcement.
-     *
-     * Delegates to SoftLimiter. If enforced, the current target is clamped
-     * and setTargetDegrees() is called if it changed.
-     *
      * @param minDeg Minimum allowed mechanical angle (deg).
      * @param maxDeg Maximum allowed mechanical angle (deg).
      * @param enforce Enable enforcement immediately if true (default: true).
      */
-    void setSoftLimits(float minDeg, float maxDeg, bool enforce = true);
+    void setSoftLimits(float minDeg, float maxDeg, bool enforce = true) override;
 
     /**
      * @brief Set per-command motion timeout in milliseconds.
      * @param ms Timeout in milliseconds; 0 disables the guard.
      */
-    void setMotionTimeoutMs(uint32_t ms);
+    void setMotionTimeoutMs(uint32_t ms) override;
 
     /**
      * @brief Get the configured per-command motion timeout in milliseconds.
      * @return Timeout in milliseconds; 0 if disabled.
      */
-    uint32_t getMotionTimeoutMs() const;
+    uint32_t getMotionTimeoutMs() const override;
 
     /**
      * @brief Enable or disable motion profile shaping at runtime.
@@ -277,18 +263,17 @@ class MotorController {
 
     /**
      * @brief Set feed-forward gains used as: u_ff = Kff_pos*ref + Kff_vel*refDot.
-     *
      * @param kpos Position feed-forward gain (percent per degree).
      * @param kvel Velocity feed-forward gain (percent per percent-of-speed, signed).
      */
-    void setFeedForward(float kpos, float kvel);
+    void setFeedForward(float kpos, float kvel) override;
 
     /**
      * @brief Get the current feed-forward gains.
      * @param kpos Out: position feed-forward gain.
      * @param kvel Out: velocity feed-forward gain.
      */
-    void getFeedForward(float& kpos, float& kvel) const;
+    void getFeedForward(float& kpos, float& kvel) const override;
 
     /**
      * @brief Set the number of PID warmup cycles to skip settle/stuck decisions.
@@ -338,42 +323,30 @@ class MotorController {
     void notifyControlTaskFromISR(BaseType_t* higherPrioTaskWoken);
 
     /**
-     * @brief User callback signature for controller events.
-     * @param status Current snapshot of controller state.
-     * @param user Opaque user pointer passed at registration.
-     */
-    using MotionEventCallback = void (*)(const MotorStatus& status, void* user);
-
-    /**
      * @brief Register callback fired once when motion is declared done.
      * @param cb Function pointer or nullptr to clear.
      * @param user Opaque pointer passed back on callback.
      */
-    void setOnMotionDone(MotionEventCallback cb, void* user = nullptr);
+    void setOnMotionDone(MotionEventCallback cb, void* user = nullptr) override;
 
     /**
      * @brief Register callback fired when stall is detected.
      * @param cb Function pointer or nullptr to clear.
      * @param user Opaque pointer passed back on callback.
      */
-    void setOnStall(MotionEventCallback cb, void* user = nullptr);
+    void setOnStall(MotionEventCallback cb, void* user = nullptr) override;
 
     /**
      * @brief Register callback fired when a soft limit is hit.
      * @param cb Function pointer or nullptr to clear.
      * @param user Opaque pointer passed back on callback.
      */
-    void setOnLimitHit(MotionEventCallback cb, void* user = nullptr);
+    void setOnLimitHit(MotionEventCallback cb, void* user = nullptr) override;
 
   private:
-    /** @brief Encoder feedback interface for position measurement. */
-    Encoder::Encoder& encoder;
-
-    /** @brief Motor driver interface for direction and speed commands. */
-    DRV8876::DRV8876& motor;
-
-    /** @brief PID regulator instance for error-driven control output. */
-    PID::PIDController& pid;
+    std::unique_ptr<DRV8876::DRV8876> motor;      ///< Owned motor driver instance.
+    std::unique_ptr<Encoder::Encoder> encoder;    ///< Owned encoder instance.
+    std::unique_ptr<PID::PIDController> pid;      ///< Owned PID controller instance.
 
     /** @brief User-defined motion parameters and sub-component configurations. */
     MotorControllerConfig config;

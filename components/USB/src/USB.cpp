@@ -192,7 +192,8 @@ void USB::flushRxBuffer() {
     taskEXIT_CRITICAL(&usbSpinLock);
 }
 
-bool USB::usbIsConnected() const { return serialIsOpen.load(std::memory_order_relaxed) && isInitialized; }
+bool USB::isConnected() const { return serialIsOpen.load(std::memory_order_relaxed) && isInitialized; }
+bool USB::usbIsConnected() const { return isConnected(); }
 bool USB::newDataIsReceived() const { return messageArrived; }
 }  // namespace USB
 }  // namespace DC_Motor_Controller_Firmware

@@ -10,21 +10,19 @@
 
 #pragma once
 
+#include "IMotorCommHandler.hpp"
+#include "IComm.hpp"
+#include "IMotorController.hpp"
+#include "IEncoder.hpp"
 #include "USB.hpp"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include <memory>
 
 namespace DC_Motor_Controller_Firmware {
-namespace Control {
-class MotorController;
-}
-namespace Encoder {
-class Encoder;
-}
-
 namespace Communication {
 
 /**
@@ -35,41 +33,47 @@ namespace Communication {
  * also handles closed-loop application logic (target setting, PID tuning,
  * motion-done notification).
  */
-class MotorCommHandler {
+class MotorCommHandler : public IMotorCommHandler {
   public:
     /**
-     * @brief Constructor.
-     * @param usbRef Reference to the initialized USB communication interface.
-     * @param motor Optional pointer to the motor controller for application logic.
-     * @param enc Optional pointer to the encoder for position feedback.
+     * @brief Constructor. Creates USB communication interface internally.
+     * @param motorPtr Optional pointer to the motor controller for application logic.
+     * @param encoderPtr Optional pointer to the encoder for position feedback.
      */
-    explicit MotorCommHandler(USB::USB& usbRef, Control::MotorController* motorPtr = nullptr, Encoder::Encoder* encoderPtr = nullptr);
+    explicit MotorCommHandler(IMotorController* motorPtr = nullptr, IEncoder* encoderPtr = nullptr);
 
     /**
-     * @brief Destructor.
-     *
-     * Deletes the FreeRTOS task created by startTask(), if running.
+     * @brief Initialize the internal USB communication interface.
+     * @return ESP_OK on success, else error code.
      */
-    ~MotorCommHandler();
+    esp_err_t init();
 
     /**
-     * @brief Starts the FreeRTOS task that continuously processes USB commands.
-     *
-     * Creates a background task (`MotorCommTask`) using `xTaskCreate()` which
-     * calls `process()`. Does nothing if the task is already running.
+     * @brief Get pointer to the internal communication interface.
+     * @return Non-owning pointer to IComm.
      */
-    void startTask();
+    IComm* getComm() const;
 
     /**
-     * @brief Poll for and process incoming USB messages.
+     * @brief Destructor. Deletes the FreeRTOS task created by startTask(), if running.
      */
-    void process();
+    ~MotorCommHandler() override;
 
     /**
-     * @brief Sends the current motor position in degrees over USB.
+     * @brief Starts the FreeRTOS task that continuously processes communication commands.
+     */
+    void startTask() override;
+
+    /**
+     * @brief Poll for and process incoming messages.
+     */
+    void process() override;
+
+    /**
+     * @brief Sends the current motor position in degrees.
      * @param degrees Position in degrees.
      */
-    void sendMotorState(float degrees);
+    void sendMotorState(float degrees) override;
 
     /**
      * @brief Sends current PID parameters in response to GET_PID.
@@ -78,28 +82,28 @@ class MotorCommHandler {
      * @param kd Derivative gain.
      * @return esp_err_t ESP_OK if successful.
      */
-    esp_err_t sendPIDParams(float kp, float ki, float kd);
+    esp_err_t sendPIDParams(float kp, float ki, float kd) override;
 
     /**
      * @brief Sends a notification that the motor has reached its target.
      */
-    void notifyMotorPositionReached();
+    void notifyMotorPositionReached() override;
 
     /**
      * @brief Clears the current position target and its flag.
      */
-    void clearTarget();
+    void clearTarget() override;
 
     /**
      * @brief Clears the PID request flag.
      */
-    void clearPIDRequest();
+    void clearPIDRequest() override;
 
     /**
      * @brief Returns the most recently received target angle.
-     * @return float Target angle in degrees.
+     * @return Target angle in degrees.
      */
-    float getTargetDegrees();
+    float getTargetDegrees() override;
 
     /**
      * @brief Retrieves the most recently received PID parameters.
@@ -107,52 +111,52 @@ class MotorCommHandler {
      * @param ki Output: integral gain.
      * @param kd Output: derivative gain.
      */
-    void getPIDParams(float& kp, float& ki, float& kd);
+    void getPIDParams(float& kp, float& ki, float& kd) override;
 
     /**
      * @brief Indicates if a new target angle was received.
      * @return true if new target is available, false otherwise.
      */
-    bool isNewTargetReceived() const;
+    bool isNewTargetReceived() const override;
 
     /**
      * @brief Indicates if new PID parameters were received.
      * @return true if updated PID is available, false otherwise.
      */
-    bool isNewPIDReceived() const;
+    bool isNewPIDReceived() const override;
 
     /**
      * @brief Indicates if the host requested current PID parameters.
      * @return true if GET_PID was received, false otherwise.
      */
-    bool wasPIDRequested() const;
+    bool wasPIDRequested() const override;
 
     /**
      * @brief Indicates if the STOP command was received.
      * @return true if STOP requested, false otherwise.
      */
-    bool isStopRequested() const;
+    bool isStopRequested() const override;
 
     /**
      * @brief Indicates if the motor is currently enabled.
      * @return true if enabled, false if disabled.
      */
-    bool isMotorEnabled() const;
+    bool isMotorEnabled() const override;
 
     /**
-     * @brief Indicates if the USB serial interface is open.
+     * @brief Indicates if the communication interface is open.
      * @return true if open, false otherwise.
      */
-    bool isUSBOpen() const;
+    bool isUSBOpen() const override;
 
     /**
      * @brief Clears the stop flag.
      * @param stopRequested Optionally set to true to reassert stop state.
      */
-    void clearStopFlag(bool stopRequested = false);
+    void clearStopFlag(bool stopRequested = false) override;
 
   private:
-    USB::USB& usb;                      ///< USB interface reference
+    std::unique_ptr<USB::USB> comm;     ///< Owned USB communication interface
     TaskHandle_t taskHandle = nullptr;  ///< Handle for the FreeRTOS task
     mutable portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
@@ -168,8 +172,8 @@ class MotorCommHandler {
     bool stopRequested = false;  ///< Flag: STOP command received
     bool motorEnabled = true;    ///< Flag: motor is enabled or disabled
 
-    Control::MotorController* motor = nullptr;  ///< Optional motor controller for application logic
-    Encoder::Encoder* encoder = nullptr;        ///< Optional encoder for position feedback
+    IMotorController* motor = nullptr;  ///< Optional motor controller for application logic
+    IEncoder* encoder = nullptr;        ///< Optional encoder for position feedback
 
     float logicKp = 0.0f;        ///< Cached PID kp for application logic
     float logicKi = 0.0f;        ///< Cached PID ki for application logic

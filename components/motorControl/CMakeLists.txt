@@ -6,7 +6,8 @@ idf_component_register(
          "src/SoftLimiter.cpp"
          "src/MotionGuard.cpp"
     INCLUDE_DIRS "include"
-    REQUIRES PID DRV8876 Encoder
+    REQUIRES Interfaces DRV8876 Encoder PID
+    PRIV_REQUIRES esp_timer
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=format)

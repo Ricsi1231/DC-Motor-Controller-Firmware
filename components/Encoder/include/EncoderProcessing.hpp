@@ -13,21 +13,12 @@
 #include <stdint.h>
 #include <math.h>
 
+#include "IEncoder.hpp"
+
 namespace DC_Motor_Controller_Firmware {
 namespace Encoder {
 
-/**
- * @enum motorDirection
- * @brief Logical rotation direction.
- *
- * @details
- * LEFT  => counterclockwise
- * RIGHT => clockwise
- */
-enum class motorDirection : bool {
-    LEFT = true,   ///< Counter-clockwise direction
-    RIGHT = false  ///< Clockwise direction
-};
+using motorDirection = EncoderDirection;
 
 /**
  * @enum SpeedFilterType

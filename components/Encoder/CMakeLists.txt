@@ -10,6 +10,7 @@ idf_component_register(
         esp_timer
         freertos
         log
+        Interfaces
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-error=format)

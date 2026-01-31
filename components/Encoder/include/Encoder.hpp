@@ -57,26 +57,6 @@ struct EncoderConfig {
 };
 
 /**
- * @struct EncoderStats
- * @brief Snapshot of encoder runtime statistics.
- *
- * @details
- * - `totalCounts` accumulates signed ticks across watchpoint wraps.
- * - `lastDelta` is the tick change measured in the last calc period.
- * - `rpmRaw` is unfiltered instantaneous RPM; `rpmFiltered` is post-filter.
- * - `overflows` counts watchpoint wrap events. `missedEdges` is an estimate from
- *   estimator heuristics (not guaranteed exact).
- */
-struct EncoderStats {
-    int64_t totalCounts = 0;   ///< Absolute accumulated tick count (signed)
-    int64_t lastDelta = 0;     ///< Tick delta during last timer period
-    float rpmRaw = 0.0f;       ///< Instantaneous RPM before filtering
-    float rpmFiltered = 0.0f;  ///< Filtered RPM estimate
-    uint32_t overflows = 0;    ///< Watchpoint wrap-arounds
-    uint32_t missedEdges = 0;  ///< Estimated dropped edges
-};
-
-/**
  * @class Encoder
  * @brief Rotary encoder reader built on ESP32 PCNT + esp_timer.
  *
@@ -92,7 +72,7 @@ struct EncoderStats {
  * from application tasks. Mutating operations guard internal state with
  * `encoderMutex` where needed.
  */
-class Encoder {
+class Encoder : public IEncoder {
   public:
     /**
      * @brief Construct an Encoder with the given configuration.
@@ -103,7 +83,7 @@ class Encoder {
     /**
      * @brief Destructor. Releases PCNT channels, timer, and other resources.
      */
-    ~Encoder();
+    ~Encoder() override;
 
     Encoder(const Encoder&) = delete;             ///< Non-copyable
     Encoder& operator=(const Encoder&) = delete;  ///< Non-copy-assignable
@@ -125,25 +105,25 @@ class Encoder {
      * @brief Initialize PCNT, timer, IO, and optional watch-point logic.
      * @return ESP_OK on success or esp_err_t on failure.
      */
-    esp_err_t init();
+    esp_err_t init() override;
 
     /**
      * @brief Start periodic RPM calculations and enable PCNT unit.
      * @return ESP_OK on success or error code.
      */
-    esp_err_t start();
+    esp_err_t start() override;
 
     /**
      * @brief Stop periodic calculations and disable PCNT unit.
      * @return ESP_OK on success or error code.
      */
-    esp_err_t stop();
+    esp_err_t stop() override;
 
     /**
      * @brief Reset accumulated position to zero.
      * @return ESP_OK on success or error code.
      */
-    esp_err_t resetPosition();
+    esp_err_t resetPosition() override;
 
     /**
      * @brief Electrically invert A/B interpretation (motor wiring inversion).
@@ -160,49 +140,49 @@ class Encoder {
      * @brief Set mechanical gear ratio applied to position and RPM readouts.
      * @param ratio Gear ratio (>0). Values ≠1.0 scale outputs accordingly.
      */
-    void setGearRatio(float ratio) noexcept;
+    void setGearRatio(float ratio) noexcept override;
 
     /**
      * @brief Get current position in raw encoder ticks (signed).
      * @return Accumulated tick count.
      */
-    int32_t getPositionTicks() const noexcept;
+    int32_t getPositionTicks() const noexcept override;
 
     /**
      * @brief Get current mechanical position in degrees.
      * @return Position (0–360) wrapping according to tick count and ratio.
      */
-    float getPositionInDegrees() const noexcept;
+    float getPositionInDegrees() const noexcept override;
 
     /**
      * @brief Get filtered RPM estimate (hybrid + filter).
      * @return Filtered RPM (signed by direction).
      */
-    float getRpm() const noexcept;
+    float getRpm() const noexcept override;
 
     /**
      * @brief Get unfiltered instantaneous RPM.
      * @return Raw RPM estimate (signed).
      */
-    float getRpmUnfiltered() const noexcept;
+    float getRpmUnfiltered() const noexcept override;
 
     /**
      * @brief Get rounded integer RPM (useful for coarse UI / logging).
      * @return Rounded RPM (signed).
      */
-    int32_t getRpmRounded() const noexcept;
+    int32_t getRpmRounded() const noexcept override;
 
     /**
      * @brief Get stable (debounced) motor direction.
-     * @return motorDirection enum value.
+     * @return EncoderDirection enum value.
      */
-    motorDirection getMotorDirection() const noexcept;
+    EncoderDirection getMotorDirection() const noexcept override;
 
     /**
      * @brief Get immediate/raw direction (fast path, minimal debouncing).
-     * @return motorDirection enum value.
+     * @return EncoderDirection enum value.
      */
-    motorDirection getMotorDirectionRaw() const noexcept;
+    EncoderDirection getMotorDirectionRaw() const noexcept override;
 
     /**
      * @brief Set direction detector configuration.
@@ -255,19 +235,19 @@ class Encoder {
      * @brief Health flag: true if RPM beneath stall threshold.
      * @return true if considered stalled.
      */
-    bool isStalled() const noexcept;
+    bool isStalled() const noexcept override;
 
     /**
      * @brief Health flag: true if recent RPM stdev exceeds noise threshold.
      * @return true if considered noisy.
      */
-    bool isNoisy() const noexcept;
+    bool isNoisy() const noexcept override;
 
     /**
      * @brief Health flag: true if near PCNT saturation (tick threshold).
      * @return true if considered saturated.
      */
-    bool isSaturated() const noexcept;
+    bool isSaturated() const noexcept override;
 
     /**
      * @brief Set RPM threshold below which the encoder is considered stalled.
@@ -291,7 +271,7 @@ class Encoder {
      * @brief Get a consistent snapshot of runtime statistics.
      * @return EncoderStats struct with counts, RPMs, and counters.
      */
-    EncoderStats getStats() const noexcept;
+    EncoderStats getStats() const noexcept override;
 
   private:
     /**

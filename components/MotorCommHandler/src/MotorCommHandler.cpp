@@ -1,6 +1,4 @@
 #include "MotorCommHandler.hpp"
-#include "Encoder.hpp"
-#include "motorControl.hpp"
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -9,8 +7,18 @@
 
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
-MotorCommHandler::MotorCommHandler(USB::USB& usbRef, Control::MotorController* motorPtr, Encoder::Encoder* encoderPtr)
-    : usb(usbRef), motor(motorPtr), encoder(encoderPtr) {}
+MotorCommHandler::MotorCommHandler(IMotorController* motorPtr, IEncoder* encoderPtr)
+    : comm(std::make_unique<USB::USB>()), motor(motorPtr), encoder(encoderPtr) {}
+
+esp_err_t MotorCommHandler::init() {
+    esp_err_t err = comm->init();
+    if (err != ESP_OK) {
+        ESP_LOGE("MotorCommHandler", "USB init failed: %s", esp_err_to_name(err));
+    }
+    return err;
+}
+
+IComm* MotorCommHandler::getComm() const { return comm.get(); }
 
 MotorCommHandler::~MotorCommHandler() {}
 
@@ -18,7 +26,7 @@ void MotorCommHandler::process() {
     uint8_t buffer[128];
     size_t len = 0;
 
-    if (usb.receiveData(buffer, &len) == ESP_OK && len > 0) {
+    if (comm->receiveData(buffer, &len) == ESP_OK && len > 0) {
         buffer[len] = '\0';
         parseMessage(reinterpret_cast<const char*>(buffer));
     }
@@ -93,11 +101,11 @@ void MotorCommHandler::parseMessage(const char* msg) {
         if (ret == 3) {
             newPID = true;
             portEXIT_CRITICAL(&spinlock);
-            usb.sendString("ACK\n");
+            comm->sendString("ACK\n");
             return;
         } else {
             portEXIT_CRITICAL(&spinlock);
-            usb.sendString("ERR\n");
+            comm->sendString("ERR\n");
             return;
         }
     } else if (strcmp(msg, MSG_GET_PID) == 0) {
@@ -120,7 +128,7 @@ void MotorCommHandler::sendMotorState(float degrees) {
     char msg[64];
 
     snprintf(msg, sizeof(msg), "%s%.2f\n", MSG_MOTOR_POS, degrees);
-    usb.sendString(msg);
+    comm->sendString(msg);
 }
 
 esp_err_t MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
@@ -129,7 +137,7 @@ esp_err_t MotorCommHandler::sendPIDParams(float kp, float ki, float kd) {
 
     snprintf(msg, sizeof(msg), "%s%.2f,%.2f,%.2f\n", MSG_PID_REPLY, kp, ki, kd);
     ESP_LOGI("Comm", "sendPIDParams: %s", msg);
-    usbState = usb.sendString(msg);
+    usbState = comm->sendString(msg);
 
     if (usbState == ESP_OK) {
         pidRequested = false;
@@ -145,7 +153,7 @@ void MotorCommHandler::clearTarget() {
     portEXIT_CRITICAL(&spinlock);
 }
 
-void MotorCommHandler::notifyMotorPositionReached() { usb.sendString(MSG_REACHED); }
+void MotorCommHandler::notifyMotorPositionReached() { comm->sendString(MSG_REACHED); }
 
 float MotorCommHandler::getTargetDegrees() {
     portENTER_CRITICAL(&spinlock);
@@ -219,7 +227,7 @@ bool MotorCommHandler::isMotorEnabled() const {
 bool MotorCommHandler::isUSBOpen() const {
     bool value;
     portENTER_CRITICAL(&spinlock);
-    value = usb.usbIsConnected();
+    value = comm->isConnected();
     portEXIT_CRITICAL(&spinlock);
     return value;
 }
