@@ -10,7 +10,7 @@ using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
 
-DRV8876Config motorConfig = {
+DRV8876Config motorDriverConfig = {
     .phPin = GPIO_NUM_4,
     .enPin = GPIO_NUM_5,
     .nFault = GPIO_NUM_6,
@@ -48,7 +48,7 @@ EncoderConfig encoderConfig = {
     .direction = {.hysteresisThreshold = 2, .debounceTimeMs = 50, .enableHysteresis = true},
 };
 
-PidConfig defaultConfig = {
+PidConfig pidConfig = {
     .kp = 1.0f,
     .ki = 0.1f,
     .kd = 0.08f,
@@ -60,7 +60,7 @@ PidConfig defaultConfig = {
     .stuckTimeoutSec = 0.5f,
 };
 
-MotorControllerConfig motorCfg = {
+MotorControllerConfig motorControllerConfig = {
     .minSpeed = 2.0f,
     .maxSpeed = 100.0f,
     .minErrorToMove = 0.2f,

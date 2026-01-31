@@ -27,32 +27,32 @@ USB::~USB() {}
 esp_err_t USB::init() {
     esp_err_t returnValue = ESP_OK;
 
-    const tinyusb_config_t usbCfg = {
+    const tinyusb_config_t usbDriverConfig = {
         .task = TINYUSB_TASK_DEFAULT(),
     };
 
-    tinyusb_config_cdcacm_t amcCfg = {.cdc_port = TINYUSB_CDC_ACM_0,
-                                      .callback_rx = &usbCallback,
-                                      .callback_rx_wanted_char = NULL,
-                                      .callback_line_state_changed = NULL,
-                                      .callback_line_coding_changed = NULL};
+    tinyusb_config_cdcacm_t cdcAcmConfig = {.cdc_port = TINYUSB_CDC_ACM_0,
+                                             .callback_rx = &usbCallback,
+                                             .callback_rx_wanted_char = NULL,
+                                             .callback_line_state_changed = NULL,
+                                             .callback_line_coding_changed = NULL};
 
-    returnValue = tinyusb_driver_install(&usbCfg);
+    returnValue = tinyusb_driver_install(&usbDriverConfig);
 
     if (returnValue != ESP_OK) {
         ESP_LOGW(TAG, "USB init - cannot install usb config");
         return ESP_FAIL;
     }
 
-    returnValue = tinyusb_cdcacm_init(&amcCfg);
+    returnValue = tinyusb_cdcacm_init(&cdcAcmConfig);
 
     if (returnValue != ESP_OK) {
         ESP_LOGW(TAG, "USB init - cannot install acm config, trying to use other port");
 
-        amcCfg.cdc_port = TINYUSB_CDC_ACM_1;
+        cdcAcmConfig.cdc_port = TINYUSB_CDC_ACM_1;
         USB::USB_INTERFACE_PORT = TINYUSB_CDC_ACM_1;
 
-        returnValue = tinyusb_cdcacm_init(&amcCfg);
+        returnValue = tinyusb_cdcacm_init(&cdcAcmConfig);
 
         if (returnValue != ESP_OK) {
             ESP_LOGW(TAG, "USB init - cannot install acm config, port or other problem");

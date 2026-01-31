@@ -541,7 +541,7 @@ uint32_t Encoder::getGlitchFilterNs() const noexcept {
 esp_err_t Encoder::initPcnt() {
     ESP_LOGI(TAG, "Initializing PCNT unit");
 
-    pcnt_unit_config_t localCfg = encoderConfig.unitConfig;
+    pcnt_unit_config_t localUnitConfig = encoderConfig.unitConfig;
 
     int requestedLow = encoderConfig.watchLowLimit;
     int requestedHigh = encoderConfig.watchHighLimit;
@@ -557,10 +557,10 @@ esp_err_t Encoder::initPcnt() {
 
     ESP_LOGI(TAG, "PCNT limits: low=%d, high=%d", lowLimit, highLimit);
 
-    localCfg.low_limit = lowLimit;
-    localCfg.high_limit = highLimit;
+    localUnitConfig.low_limit = lowLimit;
+    localUnitConfig.high_limit = highLimit;
 
-    const esp_err_t result = pcnt_new_unit(&localCfg, &pcntUnit);
+    const esp_err_t result = pcnt_new_unit(&localUnitConfig, &pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_new_unit failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -578,8 +578,8 @@ esp_err_t Encoder::initPcntFilter() {
 
     ESP_LOGI(TAG, "Setting up glitch filter: %" PRIu32 " ns", encoderConfig.filterThresholdNs);
 
-    pcnt_glitch_filter_config_t filterCfg = {.max_glitch_ns = encoderConfig.filterThresholdNs};
-    const esp_err_t result = pcnt_unit_set_glitch_filter(pcntUnit, &filterCfg);
+    pcnt_glitch_filter_config_t glitchFilterConfig = {.max_glitch_ns = encoderConfig.filterThresholdNs};
+    const esp_err_t result = pcnt_unit_set_glitch_filter(pcntUnit, &glitchFilterConfig);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_set_glitch_filter failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -592,14 +592,14 @@ esp_err_t Encoder::initPcntFilter() {
 esp_err_t Encoder::initPcntIo() {
     ESP_LOGI(TAG, "Configuring GPIO pins (A=%d, B=%d, pullup=%s)", encoderConfig.pinA, encoderConfig.pinB, encoderConfig.openCollectorInputs ? "ON" : "OFF");
 
-    gpio_config_t ioCfg = {};
-    ioCfg.pin_bit_mask = (1ULL << encoderConfig.pinA) | (1ULL << encoderConfig.pinB);
-    ioCfg.mode = GPIO_MODE_INPUT;
-    ioCfg.pull_up_en = encoderConfig.openCollectorInputs ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
-    ioCfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    ioCfg.intr_type = GPIO_INTR_DISABLE;
+    gpio_config_t gpioConfig = {};
+    gpioConfig.pin_bit_mask = (1ULL << encoderConfig.pinA) | (1ULL << encoderConfig.pinB);
+    gpioConfig.mode = GPIO_MODE_INPUT;
+    gpioConfig.pull_up_en = encoderConfig.openCollectorInputs ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
+    gpioConfig.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpioConfig.intr_type = GPIO_INTR_DISABLE;
 
-    esp_err_t result = gpio_config(&ioCfg);
+    esp_err_t result = gpio_config(&gpioConfig);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "gpio_config failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -607,10 +607,10 @@ esp_err_t Encoder::initPcntIo() {
 
     ESP_LOGI(TAG, "Creating PCNT channels");
 
-    pcnt_chan_config_t chA = {.edge_gpio_num = encoderConfig.pinA, .level_gpio_num = encoderConfig.pinB, .flags = {}};
-    pcnt_chan_config_t chB = {.edge_gpio_num = encoderConfig.pinB, .level_gpio_num = encoderConfig.pinA, .flags = {}};
+    pcnt_chan_config_t channelAConfig = {.edge_gpio_num = encoderConfig.pinA, .level_gpio_num = encoderConfig.pinB, .flags = {}};
+    pcnt_chan_config_t channelBConfig = {.edge_gpio_num = encoderConfig.pinB, .level_gpio_num = encoderConfig.pinA, .flags = {}};
 
-    result = pcnt_new_channel(pcntUnit, &chA, &chanA);
+    result = pcnt_new_channel(pcntUnit, &channelAConfig, &chanA);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_new_channel(A) failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -628,7 +628,7 @@ esp_err_t Encoder::initPcntIo() {
         return result;
     }
 
-    result = pcnt_new_channel(pcntUnit, &chB, &chanB);
+    result = pcnt_new_channel(pcntUnit, &channelBConfig, &chanB);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_new_channel(B) failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;

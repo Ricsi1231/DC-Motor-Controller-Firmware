@@ -43,9 +43,9 @@ class PIDController : public IPIDController {
   public:
     /**
      * @brief Constructor to initialize the PID controller with config values.
-     * @param cfg Constant reference to PidConfig struct.
+     * @param pidConfig Constant reference to PidConfig struct.
      */
-    explicit PIDController(const PidConfig& cfg);
+    explicit PIDController(const PidConfig& pidConfig);
 
     /**
      * @brief Destructor.

@@ -37,10 +37,10 @@ class MotorCommHandler : public IMotorCommHandler {
   public:
     /**
      * @brief Constructor. Creates USB communication interface internally.
-     * @param motorPtr Optional pointer to the motor controller for application logic.
-     * @param encoderPtr Optional pointer to the encoder for position feedback.
+     * @param motorController Optional pointer to the motor controller for application logic.
+     * @param encoder Optional pointer to the encoder for position feedback.
      */
-    explicit MotorCommHandler(IMotorController* motorPtr = nullptr, IEncoder* encoderPtr = nullptr);
+    explicit MotorCommHandler(IMotorController* motorController = nullptr, IEncoder* encoder = nullptr);
 
     /**
      * @brief Initialize the internal USB communication interface.

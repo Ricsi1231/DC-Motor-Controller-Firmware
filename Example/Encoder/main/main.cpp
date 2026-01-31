@@ -52,15 +52,15 @@ void encoderSimulation(int steps, int delay_us = 1000, bool rotationDirection = 
 }
 
 extern "C" void app_main() {
-    constexpr pcnt_unit_config_t unitCfg = {.low_limit = -1000, .high_limit = 1000, .intr_priority = 0, .flags = {.accum_count = true}};
+    constexpr pcnt_unit_config_t pcntUnitConfig = {.low_limit = -1000, .high_limit = 1000, .intr_priority = 0, .flags = {.accum_count = true}};
 
-    constexpr SpeedFilterConfig speedFilterCfg = {.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 2.0f, .sampleRateHz = 100};
+    constexpr SpeedFilterConfig speedFilterConfig = {.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 2.0f, .sampleRateHz = 100};
 
-    constexpr DirectionConfig directionCfg = {.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
+    constexpr DirectionConfig directionConfig = {.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
 
-    constexpr EncoderConfig encCfg = {.pinA = GPIO_NUM_1,
+    constexpr EncoderConfig encoderConfig = {.pinA = GPIO_NUM_1,
                                       .pinB = GPIO_NUM_2,
-                                      .unitConfig = unitCfg,
+                                      .unitConfig = pcntUnitConfig,
                                       .pulsesPerRevolution = 1024,
                                       .filterThresholdNs = 1000,
                                       .rpmCalcPeriodUs = 100000,
@@ -71,22 +71,22 @@ extern "C" void app_main() {
                                       .openCollectorInputs = false,
                                       .rpmBlendThreshold = 10,
                                       .rpmBlendBand = 3,
-                                      .speedFilter = speedFilterCfg,
-                                      .direction = directionCfg};
+                                      .speedFilter = speedFilterConfig,
+                                      .direction = directionConfig};
 
-    Encoder encoder(encCfg);
+    Encoder encoder(encoderConfig);
     initEncoderSimulation();
 
-    esp_err_t err = encoder.init();
+    esp_err_t errorStatus = encoder.init();
 
-    if (err != ESP_OK) {
+    if (errorStatus != ESP_OK) {
         ESP_LOGE("ENCODER", "Failed to initialize encoder");
         return;
     }
 
-    err = encoder.start();
+    errorStatus = encoder.start();
 
-    if (err != ESP_OK) {
+    if (errorStatus != ESP_OK) {
         ESP_LOGE("ENCODER", "Failed to start encoder");
         return;
     }

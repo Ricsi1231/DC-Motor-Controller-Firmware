@@ -7,8 +7,8 @@
 
 namespace DC_Motor_Controller_Firmware {
 namespace Communication {
-MotorCommHandler::MotorCommHandler(IMotorController* motorPtr, IEncoder* encoderPtr)
-    : comm(std::make_unique<USB::USB>()), motor(motorPtr), encoder(encoderPtr) {}
+MotorCommHandler::MotorCommHandler(IMotorController* motorController, IEncoder* encoder)
+    : comm(std::make_unique<USB::USB>()), motor(motorController), encoder(encoder) {}
 
 esp_err_t MotorCommHandler::init() {
     esp_err_t err = comm->init();
@@ -39,16 +39,16 @@ void MotorCommHandler::startTask() {
 }
 
 void MotorCommHandler::commTaskWrapper(void* param) {
-    auto* self = static_cast<MotorCommHandler*>(param);
+    auto* handler = static_cast<MotorCommHandler*>(param);
 
-    if (self->motor != nullptr && self->encoder != nullptr && self->getPIDValuesFirstTime) {
-        self->motor->getPID(self->logicKp, self->logicKi, self->logicKd);
-        self->getPIDValuesFirstTime = false;
+    if (handler->motor != nullptr && handler->encoder != nullptr && handler->getPIDValuesFirstTime) {
+        handler->motor->getPID(handler->logicKp, handler->logicKi, handler->logicKd);
+        handler->getPIDValuesFirstTime = false;
     }
 
     while (true) {
-        self->process();
-        self->processApplicationLogic();
+        handler->process();
+        handler->processApplicationLogic();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -74,8 +74,8 @@ void MotorCommHandler::processApplicationLogic() {
     if (wasPIDRequested()) {
         if (isUSBOpen()) {
             motor->getPID(logicKp, logicKi, logicKd);
-            esp_err_t res = sendPIDParams(logicKp, logicKi, logicKd);
-            if (res != ESP_OK) {
+            esp_err_t sendResult = sendPIDParams(logicKp, logicKi, logicKd);
+            if (sendResult != ESP_OK) {
                 clearPIDRequest();
             }
         } else {
@@ -97,8 +97,8 @@ void MotorCommHandler::parseMessage(const char* msg) {
         targetDegrees = strtof(msg + strlen(MSG_SET_DEG), nullptr);
         newTarget = true;
     } else if (strncmp(msg, MSG_SET_PID, strlen(MSG_SET_PID)) == 0) {
-        int ret = sscanf(msg + strlen(MSG_SET_PID), "%f,%f,%f", &pidKp, &pidKi, &pidKd);
-        if (ret == 3) {
+        int parseResult = sscanf(msg + strlen(MSG_SET_PID), "%f,%f,%f", &pidKp, &pidKi, &pidKd);
+        if (parseResult == 3) {
             newPID = true;
             portEXIT_CRITICAL(&spinlock);
             comm->sendString("ACK\n");

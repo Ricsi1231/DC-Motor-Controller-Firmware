@@ -7,12 +7,12 @@
 using namespace DC_Motor_Controller_Firmware;
 using namespace Control;
 
-MotorController::MotorController(const DRV8876::DRV8876Config& motorCfg, const Encoder::EncoderConfig& encCfg, const PID::PidConfig& pidCfg,
-                                 const MotorControllerConfig& initialConfig)
-    : motor(std::make_unique<DRV8876::DRV8876>(motorCfg)),
-      encoder(std::make_unique<Encoder::Encoder>(encCfg)),
-      pid(std::make_unique<PID::PIDController>(pidCfg)),
-      config(initialConfig) {
+MotorController::MotorController(const DRV8876::DRV8876Config& motorDriverConfig, const Encoder::EncoderConfig& encoderConfig, const PID::PidConfig& pidConfig,
+                                 const MotorControllerConfig& controllerConfig)
+    : motor(std::make_unique<DRV8876::DRV8876>(motorDriverConfig)),
+      encoder(std::make_unique<Encoder::Encoder>(encoderConfig)),
+      pid(std::make_unique<PID::PIDController>(pidConfig)),
+      config(controllerConfig) {
     ESP_LOGI(TAG, "Ctor: creating mutexes");
     targetMutex = xSemaphoreCreateMutex();
     if (targetMutex == nullptr) {
@@ -95,22 +95,22 @@ MotorController::MotorController(MotorController&& other) noexcept
 }
 
 esp_err_t MotorController::init() {
-    esp_err_t err = motor->init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Motor init failed: %s", esp_err_to_name(err));
-        return err;
+    esp_err_t errorStatus = motor->init();
+    if (errorStatus != ESP_OK) {
+        ESP_LOGE(TAG, "Motor init failed: %s", esp_err_to_name(errorStatus));
+        return errorStatus;
     }
 
-    err = encoder->init();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Encoder init failed: %s", esp_err_to_name(err));
-        return err;
+    errorStatus = encoder->init();
+    if (errorStatus != ESP_OK) {
+        ESP_LOGE(TAG, "Encoder init failed: %s", esp_err_to_name(errorStatus));
+        return errorStatus;
     }
 
-    err = encoder->start();
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Encoder start failed: %s", esp_err_to_name(err));
-        return err;
+    errorStatus = encoder->start();
+    if (errorStatus != ESP_OK) {
+        ESP_LOGE(TAG, "Encoder start failed: %s", esp_err_to_name(errorStatus));
+        return errorStatus;
     }
 
     ESP_LOGI(TAG, "Init done");
@@ -188,9 +188,9 @@ void MotorController::startTask() {
         ESP_LOGI(TAG, "Starting control task (core=%ld, prio=%u, mode=%s, stack=%u, hz=%u)", static_cast<long>(coreToUse), static_cast<unsigned>(priorityToUse),
                  notifyDriven ? "notify" : "poll", 4096u, static_cast<unsigned>(updateHz));
 
-        BaseType_t res = xTaskCreatePinnedToCore(taskFunc, "MotorControlTask", 4096, this, priorityToUse, &taskHandle, coreToUse);
+        BaseType_t createResult = xTaskCreatePinnedToCore(taskFunc, "MotorControlTask", 4096, this, priorityToUse, &taskHandle, coreToUse);
 
-        if (res != pdPASS) {
+        if (createResult != pdPASS) {
             ESP_LOGE(TAG, "xTaskCreatePinnedToCore failed");
             taskHandle = nullptr;
         } else {
@@ -229,10 +229,10 @@ void MotorController::setUpdateHz(uint32_t hz) {
 }
 
 void MotorController::taskFunc(void* param) {
-    auto* self = static_cast<MotorController*>(param);
+    auto* controller = static_cast<MotorController*>(param);
 
     TickType_t lastWake = xTaskGetTickCount();
-    uint32_t localHz = self->updateHz;
+    uint32_t localHz = controller->updateHz;
     if (localHz == 0) {
         localHz = 1;
     }
@@ -242,17 +242,17 @@ void MotorController::taskFunc(void* param) {
         period = 1;
     }
 
-    ESP_LOGI(TAG, "Task loop start (mode=%s, periodTicks=%lu)", self->notifyDriven ? "notify" : "poll", static_cast<unsigned long>(period));
+    ESP_LOGI(TAG, "Task loop start (mode=%s, periodTicks=%lu)", controller->notifyDriven ? "notify" : "poll", static_cast<unsigned long>(period));
 
     while (true) {
-        if (self->notifyDriven == true) {
-            uint32_t taken = ulTaskNotifyTake(pdTRUE, self->notifyBlockTicks);
+        if (controller->notifyDriven == true) {
+            uint32_t taken = ulTaskNotifyTake(pdTRUE, controller->notifyBlockTicks);
             if (taken == 0) {
                 continue;
             }
-            self->update();
+            controller->update();
         } else {
-            self->update();
+            controller->update();
             vTaskDelayUntil(&lastWake, period);
         }
     }
@@ -511,27 +511,27 @@ void MotorController::update() {
     }
 
     if (motionDone.load(std::memory_order_relaxed)) {
-        MotorControllerConfig cfg0 = getConfig();
+        MotorControllerConfig idleConfig = getConfig();
         float drift = currentTarget - currentPos;
         if (hit(lastStateLogUs, nowUs, 500)) {
-            float wakeTh = cfg0.guard.driftDeadband + cfg0.guard.driftHysteresis;
-            if (wakeTh < 0.0f) wakeTh = 0.0f;
-            ESP_LOGD(TAG, "idle: drift=%.3f wakeTh=%.3f", drift, wakeTh);
+            float wakeThreshold = idleConfig.guard.driftDeadband + idleConfig.guard.driftHysteresis;
+            if (wakeThreshold < 0.0f) wakeThreshold = 0.0f;
+            ESP_LOGD(TAG, "idle: drift=%.3f wakeThreshold=%.3f", drift, wakeThreshold);
         }
-        if (motionGuard.shouldWake(drift, cfg0.guard)) {
+        if (motionGuard.shouldWake(drift, idleConfig.guard)) {
             setTargetDegrees(currentTarget);
         }
         return;
     }
 
-    MotorControllerConfig cfg = getConfig();
+    MotorControllerConfig controlConfig = getConfig();
 
-    if (motionGuard.isTimedOut(nowUs, cfg.guard)) {
+    if (motionGuard.isTimedOut(nowUs, controlConfig.guard)) {
         motor->stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onStallCb) {
-            MotorStatus s0 = getStatus();
-            onStallCb(s0, onStallUser);
+            MotorStatus statusSnapshot = getStatus();
+            onStallCb(statusSnapshot, onStallUser);
         }
         resetMotionState(0);
         return;
@@ -547,59 +547,59 @@ void MotorController::update() {
         ESP_LOGD(TAG, "pid: Kp=%.4f Ki=%.4f Kd=%.4f out=%.3f", Kp, Ki, Kd, pidSignal);
     }
 
-    float refPos = currentTarget;
-    float refVelPct = profiler.getProfiledSpeed();
-    float ff = cfg.Kff_pos * refPos + cfg.Kff_vel * refVelPct;
+    float referencePosition = currentTarget;
+    float referenceVelocityPercent = profiler.getProfiledSpeed();
+    float feedForward = controlConfig.Kff_pos * referencePosition + controlConfig.Kff_vel * referenceVelocityPercent;
 
     if (hit(lastPidLogUs, nowUs, 500)) {
-        ESP_LOGV(TAG, "ff: Kpos=%.4f Kvel=%.4f refPos=%.3f refVel%%=%.2f ff=%.3f", cfg.Kff_pos, cfg.Kff_vel, refPos, refVelPct, ff);
+        ESP_LOGV(TAG, "ff: Kpos=%.4f Kvel=%.4f refPos=%.3f refVel%%=%.2f ff=%.3f", controlConfig.Kff_pos, controlConfig.Kff_vel, referencePosition, referenceVelocityPercent, feedForward);
     }
 
-    float combined = clampToPercentRange(pidSignal + ff);
+    float combined = clampToPercentRange(pidSignal + feedForward);
 
     if (softLimiter.isBlocked(combined, currentPos)) {
         motor->stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onLimitHitCb) {
-            MotorStatus s1 = getStatus();
-            onLimitHitCb(s1, onLimitHitUser);
+            MotorStatus statusSnapshot = getStatus();
+            onLimitHitCb(statusSnapshot, onLimitHitUser);
         }
         resetMotionState(0);
         return;
     }
 
-    float errAbs = fabsf(currentTarget - currentPos);
-    float mag = fabsf(combined);
-    if (mag < cfg.minSpeed && errAbs > cfg.minErrorToMove) {
-        mag = cfg.minSpeed;
+    float absoluteError = fabsf(currentTarget - currentPos);
+    float magnitude = fabsf(combined);
+    if (magnitude < controlConfig.minSpeed && absoluteError > controlConfig.minErrorToMove) {
+        magnitude = controlConfig.minSpeed;
     }
-    if (mag > cfg.maxSpeed) {
-        mag = cfg.maxSpeed;
+    if (magnitude > controlConfig.maxSpeed) {
+        magnitude = controlConfig.maxSpeed;
     }
 
-    float signedDesired = (combined >= 0.0f) ? mag : -mag;
+    float signedDesired = (combined >= 0.0f) ? magnitude : -magnitude;
 
-    float profiled = profiler.shapeSpeed(signedDesired, nowUs, cfg.profiler);
+    float profiled = profiler.shapeSpeed(signedDesired, nowUs, controlConfig.profiler);
 
-    float dpos = currentPos - lastPos;
-    float vel = dpos * static_cast<float>(updateHz);
-    lastVelDegPerSec = vel;
+    float deltaPosition = currentPos - lastPos;
+    float velocity = deltaPosition * static_cast<float>(updateHz);
+    lastVelDegPerSec = velocity;
     if (hit(lastStateLogUs, nowUs, 500)) {
-        ESP_LOGD(TAG, "state: err=%.3f vel=%.3f deg/s", currentTarget - currentPos, vel);
+        ESP_LOGD(TAG, "state: err=%.3f vel=%.3f deg/s", currentTarget - currentPos, velocity);
     }
 
     bool pidIsSettled = false;
     if (!stallDetector.isWarming()) {
         pidIsSettled = pid->isSettled();
     }
-    StallDetector::Result stallResult = stallDetector.update(dpos, errAbs, pidIsSettled, cfg.stall);
+    StallDetector::Result stallResult = stallDetector.update(deltaPosition, absoluteError, pidIsSettled, controlConfig.stall);
 
     bool settled = false;
     if (stallResult != StallDetector::Result::WARMING_UP) {
-        settled = settleDetector.update(errAbs, vel, cfg.settle);
+        settled = settleDetector.update(absoluteError, velocity, controlConfig.settle);
         if (hit(lastStateLogUs, nowUs, 500)) {
-            ESP_LOGD(TAG, "settle: cnt=%d | stuckCnt=%d move=%.4f eps=%.4f", settleDetector.getCount(), stallDetector.getStuckCount(), fabsf(dpos),
-                     cfg.stall.stuckPositionEpsilon);
+            ESP_LOGD(TAG, "settle: cnt=%d | stuckCnt=%d move=%.4f eps=%.4f", settleDetector.getCount(), stallDetector.getStuckCount(), fabsf(deltaPosition),
+                     controlConfig.stall.stuckPositionEpsilon);
         }
     }
 
@@ -608,8 +608,8 @@ void MotorController::update() {
         motor->stop();
         motionDone.store(true, std::memory_order_relaxed);
         if (onMotionDoneCb) {
-            MotorStatus s2 = getStatus();
-            onMotionDoneCb(s2, onMotionDoneUser);
+            MotorStatus statusSnapshot = getStatus();
+            onMotionDoneCb(statusSnapshot, onMotionDoneUser);
         }
         resetMotionState(0);
         lastPos = currentPos;
@@ -619,11 +619,11 @@ void MotorController::update() {
     if (stallResult == StallDetector::Result::STALLED) {
         motor->stop();
         float finalDriftAbs = fabsf(currentTarget - currentPos);
-        bool doneOk = (finalDriftAbs <= MotionGuard::getDriftDeadband(cfg.guard));
-        motionDone.store(doneOk, std::memory_order_relaxed);
+        bool settledWithinDeadband = (finalDriftAbs <= MotionGuard::getDriftDeadband(controlConfig.guard));
+        motionDone.store(settledWithinDeadband, std::memory_order_relaxed);
         if (onStallCb) {
-            MotorStatus s3 = getStatus();
-            onStallCb(s3, onStallUser);
+            MotorStatus statusSnapshot = getStatus();
+            onStallCb(statusSnapshot, onStallUser);
         }
         profiler.reset(0);
         settleDetector.reset();
@@ -632,11 +632,11 @@ void MotorController::update() {
         return;
     }
 
-    float slewOut = profiler.applySlew(profiled, nowUs, cfg.profiler.accelLimitPctPerSec);
+    float slewOut = profiler.applySlew(profiled, nowUs, controlConfig.profiler.accelLimitPctPerSec);
 
-    float speedPct = fabsf(slewOut);
-    if (speedPct > cfg.maxSpeed) {
-        speedPct = cfg.maxSpeed;
+    float speedPercent = fabsf(slewOut);
+    if (speedPercent > controlConfig.maxSpeed) {
+        speedPercent = controlConfig.maxSpeed;
     }
 
     MotorDirection dir = MotorDirection::RIGHT;
@@ -644,18 +644,18 @@ void MotorController::update() {
         dir = MotorDirection::LEFT;
     }
     motor->setDirection(dir);
-    motor->setSpeed(speedPct);
+    motor->setSpeed(speedPercent);
 
     if (hit(lastCmdLogUs, nowUs, 250)) {
-        const char* dirStr = (slewOut < 0.0f) ? "LEFT" : "RIGHT";
-        ESP_LOGI(TAG, "cmd: dir=%s speed=%.2f%%", dirStr, speedPct);
+        const char* directionString = (slewOut < 0.0f) ? "LEFT" : "RIGHT";
+        ESP_LOGI(TAG, "cmd: dir=%s speed=%.2f%%", directionString, speedPercent);
     }
 
     lastPos = currentPos;
 
     if (hit(lastStatusLogUs, nowUs, 1000)) {
-        MotorStatus s = getStatus();
-        logMotorStatus(s);
+        MotorStatus statusSnapshot = getStatus();
+        logMotorStatus(statusSnapshot);
     }
 }
 

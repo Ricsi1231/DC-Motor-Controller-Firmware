@@ -68,13 +68,13 @@ class MotorController : public IMotorController {
   public:
     /**
      * @brief Constructor. Creates motor driver, encoder, and PID controller internally.
-     * @param motorCfg DRV8876 motor driver configuration.
-     * @param encCfg Encoder configuration.
-     * @param pidCfg PID controller configuration.
-     * @param cfg Optional control parameters (default config used if omitted).
+     * @param motorDriverConfig DRV8876 motor driver configuration.
+     * @param encoderConfig Encoder configuration.
+     * @param pidConfig PID controller configuration.
+     * @param controllerConfig Optional control parameters (default config used if omitted).
      */
-    MotorController(const DRV8876::DRV8876Config& motorCfg, const Encoder::EncoderConfig& encCfg, const PID::PidConfig& pidCfg,
-                    const MotorControllerConfig& cfg = MotorControllerConfig());
+    MotorController(const DRV8876::DRV8876Config& motorDriverConfig, const Encoder::EncoderConfig& encoderConfig, const PID::PidConfig& pidConfig,
+                    const MotorControllerConfig& controllerConfig = MotorControllerConfig());
 
     /**
      * @brief Initialize motor driver, encoder, and start encoder.
@@ -184,9 +184,9 @@ class MotorController : public IMotorController {
      *
      * Thread-safe via configMutex.
      *
-     * @param cfg New configuration parameters to apply.
+     * @param config New configuration parameters to apply.
      */
-    void setConfig(const MotorControllerConfig& cfg);
+    void setConfig(const MotorControllerConfig& config);
 
     /**
      * @brief Get the current motor controller configuration.

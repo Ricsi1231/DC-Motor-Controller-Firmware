@@ -37,15 +37,15 @@ constexpr DRV8876Config motorConfig{.phPin = PH_PIN,
                                     .rampStepDelayMs = 10,
                                     .minEffectivePwmPercent = 3};
 
-constexpr pcnt_unit_config_t unitCfg{.low_limit = -32767, .high_limit = 32767, .intr_priority = 0, .flags = {.accum_count = true}};
+constexpr pcnt_unit_config_t pcntUnitConfig{.low_limit = -32767, .high_limit = 32767, .intr_priority = 0, .flags = {.accum_count = true}};
 
-constexpr SpeedFilterConfig speedFilterCfg{.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 2.0f, .sampleRateHz = 100};
+constexpr SpeedFilterConfig speedFilterConfig{.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 2.0f, .sampleRateHz = 100};
 
-constexpr DirectionConfig directionCfg{.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
+constexpr DirectionConfig directionConfig{.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
 
-constexpr EncoderConfig encCfg{.pinA = ENCODER_A,
+constexpr EncoderConfig encoderConfig{.pinA = ENCODER_A,
                                .pinB = ENCODER_B,
-                               .unitConfig = unitCfg,
+                               .unitConfig = pcntUnitConfig,
                                .pulsesPerRevolution = 1024,
                                .filterThresholdNs = 1000,
                                .rpmCalcPeriodUs = 100000,
@@ -56,8 +56,8 @@ constexpr EncoderConfig encCfg{.pinA = ENCODER_A,
                                .openCollectorInputs = false,
                                .rpmBlendThreshold = 10,
                                .rpmBlendBand = 3,
-                               .speedFilter = speedFilterCfg,
-                               .direction = directionCfg};
+                               .speedFilter = speedFilterConfig,
+                               .direction = directionConfig};
 
 constexpr PidConfig pidConfig = {.kp = 2.5f,
                                  .ki = 0.08f,
@@ -69,7 +69,7 @@ constexpr PidConfig pidConfig = {.kp = 2.5f,
                                  .errorTimeoutSec = 2.0f,
                                  .stuckTimeoutSec = 1.0f};
 
-constexpr MotorControllerConfig motorCfg = {
+constexpr MotorControllerConfig motorControllerConfig = {
     .minSpeed = 3.0f,
     .maxSpeed = 95.0f,
     .minErrorToMove = 0.3f,
@@ -81,7 +81,7 @@ constexpr MotorControllerConfig motorCfg = {
     .stall = {.stuckPositionEpsilon = 0.1f, .stuckCountLimit = 30, .pidWarmupLimit = 15, .minErrorToMove = 0.3f},
     .guard = {.motionTimeoutMs = 5000, .driftDeadband = 0.8f, .driftHysteresis = 0.4f}};
 
-MotorController motorController(motorConfig, encCfg, pidConfig, motorCfg);
+MotorController motorController(motorConfig, encoderConfig, pidConfig, motorControllerConfig);
 
 struct ExampleState {
     int currentSequenceStep = 0;

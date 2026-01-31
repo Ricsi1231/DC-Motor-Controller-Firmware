@@ -4,7 +4,7 @@
 
 using namespace DC_Motor_Controller_Firmware::PID;
 
-PIDController::PIDController(const PidConfig& cfg) : config(cfg) { reset(); }
+PIDController::PIDController(const PidConfig& pidConfig) : config(pidConfig) { reset(); }
 
 PIDController::~PIDController() {}
 
