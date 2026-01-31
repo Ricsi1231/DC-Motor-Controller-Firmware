@@ -41,9 +41,14 @@ MotorController::~MotorController() {
 }
 
 MotorController::MotorController(MotorController&& other) noexcept
-    : encoder(other.encoder), motor(other.motor), pid(other.pid), config(other.config),
-      profiler(other.profiler), settleDetector(other.settleDetector),
-      stallDetector(other.stallDetector), softLimiter(other.softLimiter),
+    : encoder(other.encoder),
+      motor(other.motor),
+      pid(other.pid),
+      config(other.config),
+      profiler(other.profiler),
+      settleDetector(other.settleDetector),
+      stallDetector(other.stallDetector),
+      softLimiter(other.softLimiter),
       motionGuard(other.motionGuard) {
     ESP_LOGI(TAG, "Move Ctor start");
     target = other.target;
@@ -241,14 +246,11 @@ void MotorController::setConfig(const MotorControllerConfig& newConfig) {
              "settlePos=%.3f settleVel=%.3f settleN=%d "
              "stuckEps=%.3f stuckN=%d pidWarmupN=%d "
              "timeoutMs=%d driftDead=%.3f hyst=%.3f",
-             config.minSpeed, config.maxSpeed, config.minErrorToMove, config.countsPerRevolution,
-             config.profiler.enabled ? "ON" : "OFF",
-             (config.profiler.type == MotionProfileType::TRAPEZOID ? "TRAP" : "S"),
-             config.profiler.accelLimitPctPerSec, config.profiler.jerkLimitPctPerSec2,
-             config.Kff_pos, config.Kff_vel,
-             config.settle.posTolDeg, config.settle.velTolDegPerSec, config.settle.countLimit,
-             config.stall.stuckPositionEpsilon, config.stall.stuckCountLimit, config.stall.pidWarmupLimit,
-             config.guard.motionTimeoutMs, config.guard.driftDeadband, config.guard.driftHysteresis);
+             config.minSpeed, config.maxSpeed, config.minErrorToMove, config.countsPerRevolution, config.profiler.enabled ? "ON" : "OFF",
+             (config.profiler.type == MotionProfileType::TRAPEZOID ? "TRAP" : "S"), config.profiler.accelLimitPctPerSec, config.profiler.jerkLimitPctPerSec2,
+             config.Kff_pos, config.Kff_vel, config.settle.posTolDeg, config.settle.velTolDegPerSec, config.settle.countLimit,
+             config.stall.stuckPositionEpsilon, config.stall.stuckCountLimit, config.stall.pidWarmupLimit, config.guard.motionTimeoutMs,
+             config.guard.driftDeadband, config.guard.driftHysteresis);
 }
 
 MotorControllerConfig MotorController::getConfig() const {
@@ -561,8 +563,8 @@ void MotorController::update() {
     if (stallResult != StallDetector::Result::WARMING_UP) {
         settled = settleDetector.update(errAbs, vel, cfg.settle);
         if (hit(lastStateLogUs, nowUs, 500)) {
-            ESP_LOGD(TAG, "settle: cnt=%d | stuckCnt=%d move=%.4f eps=%.4f",
-                     settleDetector.getCount(), stallDetector.getStuckCount(), fabsf(dpos), cfg.stall.stuckPositionEpsilon);
+            ESP_LOGD(TAG, "settle: cnt=%d | stuckCnt=%d move=%.4f eps=%.4f", settleDetector.getCount(), stallDetector.getStuckCount(), fabsf(dpos),
+                     cfg.stall.stuckPositionEpsilon);
         }
     }
 
@@ -666,7 +668,6 @@ void MotorController::setSoftLimits(float minDeg, float maxDeg, bool enforce) {
         }
     }
 
-    ESP_LOGI(TAG, "Soft limits set: [%.3f, %.3f], %s",
-             softLimiter.getMinDeg(), softLimiter.getMaxDeg(),
+    ESP_LOGI(TAG, "Soft limits set: [%.3f, %.3f], %s", softLimiter.getMinDeg(), softLimiter.getMaxDeg(),
              softLimiter.isEnforced() ? "ENFORCED" : "NOT ENFORCED");
 }

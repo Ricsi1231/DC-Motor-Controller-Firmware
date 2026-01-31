@@ -126,6 +126,4 @@ void MotionProfiler::reset(uint64_t nowUs) {
     slewLastUs = 0;
 }
 
-float MotionProfiler::getProfiledSpeed() const {
-    return profSpeedPercent;
-}
+float MotionProfiler::getProfiledSpeed() const { return profSpeedPercent; }

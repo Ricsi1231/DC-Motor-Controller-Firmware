@@ -8,8 +8,15 @@ DRV8876::DRV8876(const DRV8876Config& config) : config(config) {}
 DRV8876::~DRV8876() { ESP_LOGI(TAG, "Destructor called"); }
 
 DRV8876::DRV8876(DRV8876&& other) noexcept
-    : config(other.config), gpio(std::move(other.gpio)), pwm(std::move(other.pwm)), fault(std::move(other.fault)), ramp(std::move(other.ramp)),
-      motorDirection(other.motorDirection), motorSpeed(other.motorSpeed), previousSpeedValue(other.previousSpeedValue), initialized(other.initialized),
+    : config(other.config),
+      gpio(std::move(other.gpio)),
+      pwm(std::move(other.pwm)),
+      fault(std::move(other.fault)),
+      ramp(std::move(other.ramp)),
+      motorDirection(other.motorDirection),
+      motorSpeed(other.motorSpeed),
+      previousSpeedValue(other.previousSpeedValue),
+      initialized(other.initialized),
       enableMotorStopedLog(other.enableMotorStopedLog) {
     other.initialized = false;
 }

@@ -76,21 +76,10 @@ constexpr MotorControllerConfig motorCfg = {
     .countsPerRevolution = 1024,
     .Kff_pos = 0.02f,
     .Kff_vel = 0.15f,
-    .profiler = {.enabled = true,
-                 .type = MotionProfileType::S_CURVE,
-                 .accelLimitPctPerSec = 200.0f,
-                 .jerkLimitPctPerSec2 = 4000.0f,
-                 .maxSpeed = 95.0f},
-    .settle = {.posTolDeg = 0.5f,
-               .velTolDegPerSec = 2.0f,
-               .countLimit = 8},
-    .stall = {.stuckPositionEpsilon = 0.1f,
-              .stuckCountLimit = 30,
-              .pidWarmupLimit = 15,
-              .minErrorToMove = 0.3f},
-    .guard = {.motionTimeoutMs = 5000,
-              .driftDeadband = 0.8f,
-              .driftHysteresis = 0.4f}};
+    .profiler = {.enabled = true, .type = MotionProfileType::S_CURVE, .accelLimitPctPerSec = 200.0f, .jerkLimitPctPerSec2 = 4000.0f, .maxSpeed = 95.0f},
+    .settle = {.posTolDeg = 0.5f, .velTolDegPerSec = 2.0f, .countLimit = 8},
+    .stall = {.stuckPositionEpsilon = 0.1f, .stuckCountLimit = 30, .pidWarmupLimit = 15, .minErrorToMove = 0.3f},
+    .guard = {.motionTimeoutMs = 5000, .driftDeadband = 0.8f, .driftHysteresis = 0.4f}};
 
 DRV8876 motor(motorConfig);
 Encoder encoder(encCfg);

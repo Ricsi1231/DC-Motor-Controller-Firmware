@@ -60,9 +60,9 @@ class MotionRamp {
     esp_err_t timedRamp(uint8_t targetPercent, uint32_t rampTimeMs, uint8_t currentSpeed, const std::function<esp_err_t(uint8_t)>& setSpeedFn);
 
   private:
-    uint8_t rampStepPercent = 5;          ///< Step size per ramp iteration (%)
-    uint32_t rampStepDelayMs = 5;         ///< Delay between steps (ms)
-    uint8_t minEffectivePwmPercent = 3;   ///< Minimum effective PWM (%)
+    uint8_t rampStepPercent = 5;         ///< Step size per ramp iteration (%)
+    uint32_t rampStepDelayMs = 5;        ///< Delay between steps (ms)
+    uint8_t minEffectivePwmPercent = 3;  ///< Minimum effective PWM (%)
 
     static constexpr const char* TAG = "MotionRamp";
 };

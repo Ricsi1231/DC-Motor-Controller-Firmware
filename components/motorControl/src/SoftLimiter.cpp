@@ -17,9 +17,7 @@ void SoftLimiter::setLimits(float min, float max, bool enforce) {
     ESP_LOGI(TAG, "Soft limits set: [%.3f, %.3f], %s", minDeg, maxDeg, enforced ? "ENFORCED" : "NOT ENFORCED");
 }
 
-bool SoftLimiter::isEnforced() const {
-    return enforced;
-}
+bool SoftLimiter::isEnforced() const { return enforced; }
 
 float SoftLimiter::clampTarget(float degrees) const {
     if (!enforced) {
@@ -53,10 +51,6 @@ bool SoftLimiter::isBlocked(float signedCommand, float currentPosDeg) const {
     return false;
 }
 
-float SoftLimiter::getMinDeg() const {
-    return minDeg;
-}
+float SoftLimiter::getMinDeg() const { return minDeg; }
 
-float SoftLimiter::getMaxDeg() const {
-    return maxDeg;
-}
+float SoftLimiter::getMaxDeg() const { return maxDeg; }

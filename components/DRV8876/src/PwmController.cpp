@@ -18,8 +18,14 @@ PwmController::~PwmController() {
 }
 
 PwmController::PwmController(PwmController&& other) noexcept
-    : pwmChannel(other.pwmChannel), resolution(other.resolution), frequency(other.frequency), minFrequency(other.minFrequency),
-      maxFrequency(other.maxFrequency), maxDuty(other.maxDuty), ledcMutex(other.ledcMutex), ledcMutexTimeoutMs(other.ledcMutexTimeoutMs),
+    : pwmChannel(other.pwmChannel),
+      resolution(other.resolution),
+      frequency(other.frequency),
+      minFrequency(other.minFrequency),
+      maxFrequency(other.maxFrequency),
+      maxDuty(other.maxDuty),
+      ledcMutex(other.ledcMutex),
+      ledcMutexTimeoutMs(other.ledcMutexTimeoutMs),
       initialized(other.initialized) {
     other.ledcMutex = nullptr;
     other.initialized = false;

@@ -4,7 +4,9 @@ namespace DC_Motor_Controller_Firmware {
 namespace DRV8876 {
 
 FaultHandler::FaultHandler(FaultHandler&& other) noexcept
-    : nFaultPin(other.nFaultPin), faultTriggered(other.faultTriggered.load(std::memory_order_relaxed)), faultCallback(std::move(other.faultCallback)),
+    : nFaultPin(other.nFaultPin),
+      faultTriggered(other.faultTriggered.load(std::memory_order_relaxed)),
+      faultCallback(std::move(other.faultCallback)),
       initialized(other.initialized) {
     other.nFaultPin = GPIO_NUM_NC;
     other.faultTriggered.store(false, std::memory_order_relaxed);

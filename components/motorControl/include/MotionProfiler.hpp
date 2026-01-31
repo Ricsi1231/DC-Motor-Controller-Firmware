@@ -28,11 +28,11 @@ enum class MotionProfileType {
  * @brief Configuration for motion profile shaping.
  */
 struct MotionProfilerConfig {
-    bool enabled = false;                                           ///< Enable motion profile shaping.
-    MotionProfileType type = MotionProfileType::TRAPEZOID;          ///< Profile type selection.
-    float accelLimitPctPerSec = 300.0f;                             ///< Max acceleration of commanded speed (% per second).
-    float jerkLimitPctPerSec2 = 6000.0f;                            ///< Max jerk for S-curve (% per second^2); ignored for trapezoid.
-    float maxSpeed = 100.0f;                                        ///< Maximum speed clamp (%).
+    bool enabled = false;                                   ///< Enable motion profile shaping.
+    MotionProfileType type = MotionProfileType::TRAPEZOID;  ///< Profile type selection.
+    float accelLimitPctPerSec = 300.0f;                     ///< Max acceleration of commanded speed (% per second).
+    float jerkLimitPctPerSec2 = 6000.0f;                    ///< Max jerk for S-curve (% per second^2); ignored for trapezoid.
+    float maxSpeed = 100.0f;                                ///< Maximum speed clamp (%).
 };
 
 /**

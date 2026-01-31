@@ -30,9 +30,10 @@ EncoderConfig encoderConfig = {
     .pinB = GPIO_NUM_1,
     .unitConfig = {.low_limit = -1000,
                    .high_limit = 1000,
-                   .flags = {
-                       .accum_count = true,
-                   }},
+                   .flags =
+                       {
+                           .accum_count = true,
+                       }},
     .pulsesPerRevolution = 1024,
     .filterThresholdNs = 0,
     .rpmCalcPeriodUs = 10000,
@@ -64,8 +65,5 @@ MotorControllerConfig motorCfg = {
     .maxSpeed = 100.0f,
     .minErrorToMove = 0.2f,
     .countsPerRevolution = 1024,
-    .stall = {.stuckPositionEpsilon = 0.05f,
-              .stuckCountLimit = 50,
-              .pidWarmupLimit = 10,
-              .minErrorToMove = 0.2f},
+    .stall = {.stuckPositionEpsilon = 0.05f, .stuckCountLimit = 50, .pidWarmupLimit = 10, .minErrorToMove = 0.2f},
 };

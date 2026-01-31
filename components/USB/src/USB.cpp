@@ -72,7 +72,9 @@ esp_err_t USB::init() {
     return ESP_OK;
 }
 
-void USB::serialPortState(int itf, cdcacm_event_t* event) { serialIsOpen.store(static_cast<bool>(event->line_state_changed_data.dtr), std::memory_order_relaxed); }
+void USB::serialPortState(int itf, cdcacm_event_t* event) {
+    serialIsOpen.store(static_cast<bool>(event->line_state_changed_data.dtr), std::memory_order_relaxed);
+}
 
 void USB::usbCallback(int itf, cdcacm_event_t* event) {
     size_t length = 0;

@@ -15,10 +15,6 @@ bool SettleDetector::update(float errorAbs, float velocityDegPerSec, const Settl
     return (settleCounter >= cfg.countLimit);
 }
 
-void SettleDetector::reset() {
-    settleCounter = 0;
-}
+void SettleDetector::reset() { settleCounter = 0; }
 
-int SettleDetector::getCount() const {
-    return settleCounter;
-}
+int SettleDetector::getCount() const { return settleCounter; }

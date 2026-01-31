@@ -30,10 +30,6 @@ void StallDetector::reset() {
     pidWarmupCounter = 0;
 }
 
-int StallDetector::getStuckCount() const {
-    return stuckCounter;
-}
+int StallDetector::getStuckCount() const { return stuckCounter; }
 
-bool StallDetector::isWarming() const {
-    return (pidWarmupCounter <= lastWarmupLimit);
-}
+bool StallDetector::isWarming() const { return (pidWarmupCounter <= lastWarmupLimit); }

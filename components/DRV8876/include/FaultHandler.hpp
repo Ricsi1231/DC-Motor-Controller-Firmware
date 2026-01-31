@@ -73,10 +73,10 @@ class FaultHandler {
      */
     static IRAM_ATTR void faultISR(void* arg);
 
-    gpio_num_t nFaultPin = GPIO_NUM_NC;        ///< Fault detect pin
-    std::atomic_bool faultTriggered{false};     ///< Atomic fault flag
-    std::function<void()> faultCallback;        ///< User fault callback
-    bool initialized = false;                   ///< Initialization flag
+    gpio_num_t nFaultPin = GPIO_NUM_NC;      ///< Fault detect pin
+    std::atomic_bool faultTriggered{false};  ///< Atomic fault flag
+    std::function<void()> faultCallback;     ///< User fault callback
+    bool initialized = false;                ///< Initialization flag
 
     static constexpr const char* TAG = "FaultHandler";
 };

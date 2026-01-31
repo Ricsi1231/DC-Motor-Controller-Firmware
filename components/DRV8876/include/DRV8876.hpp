@@ -303,10 +303,10 @@ class DRV8876 {
   private:
     DRV8876Config config;  ///< Config for DRV8876 motor driver
 
-    GpioController gpio;     ///< GPIO pin management
-    PwmController pwm;       ///< PWM/LEDC management
-    FaultHandler fault;      ///< Fault detection and callback
-    MotionRamp ramp;         ///< Speed ramping logic
+    GpioController gpio;  ///< GPIO pin management
+    PwmController pwm;    ///< PWM/LEDC management
+    FaultHandler fault;   ///< Fault detection and callback
+    MotionRamp ramp;      ///< Speed ramping logic
 
     Direction motorDirection;  ///< Current motor direction
     uint8_t motorSpeed;        ///< Current speed (0–100)

@@ -37,7 +37,7 @@ using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
 using namespace DC_Motor_Controller_Firmware::Logic;
 
-const char *TAG = "MAIN APP";
+const char* TAG = "MAIN APP";
 
 USB usb;
 MotorCommHandler motorComm(usb);
@@ -50,19 +50,22 @@ CommLogicHandler commLogic(motorComm, motorControl, encoder);
 esp_err_t errorStatus = ESP_OK;
 
 extern "C" void app_main() {
-  errorStatus = motor.init();
-  if (errorStatus != ESP_OK)
-    ESP_LOGD(TAG, "Error with motor init");
+    errorStatus = motor.init();
+    if (errorStatus != ESP_OK) {
+        ESP_LOGD(TAG, "Error with motor init");
+    }
 
-  errorStatus = encoder.init();
-  if (errorStatus != ESP_OK)
-    ESP_LOGD(TAG, "Error with encoder init");
+    errorStatus = encoder.init();
+    if (errorStatus != ESP_OK) {
+        ESP_LOGD(TAG, "Error with encoder init");
+    }
 
-  errorStatus = usb.init();
-  if (errorStatus != ESP_OK)
-    ESP_LOGD(TAG, "Error with USB init");
+    errorStatus = usb.init();
+    if (errorStatus != ESP_OK) {
+        ESP_LOGD(TAG, "Error with USB init");
+    }
 
-  motorComm.startTask();
-  motorControl.startTask();
-  commLogic.startTask();
+    motorComm.startTask();
+    motorControl.startTask();
+    commLogic.startTask();
 }

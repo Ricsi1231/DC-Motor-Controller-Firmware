@@ -2,13 +2,9 @@
 
 using namespace DC_Motor_Controller_Firmware::Control;
 
-void MotionGuard::startMotion(uint64_t nowUs) {
-    motionStartUs = nowUs;
-}
+void MotionGuard::startMotion(uint64_t nowUs) { motionStartUs = nowUs; }
 
-void MotionGuard::reset() {
-    motionStartUs = 0;
-}
+void MotionGuard::reset() { motionStartUs = 0; }
 
 bool MotionGuard::isTimedOut(uint64_t nowUs, const MotionGuardConfig& cfg) const {
     if (cfg.motionTimeoutMs <= 0) {
@@ -38,10 +34,6 @@ bool MotionGuard::shouldWake(float drift, const MotionGuardConfig& cfg) const {
     return (fabsf(drift) > wakeThreshold);
 }
 
-float MotionGuard::getDriftDeadband(const MotionGuardConfig& cfg) {
-    return cfg.driftDeadband;
-}
+float MotionGuard::getDriftDeadband(const MotionGuardConfig& cfg) { return cfg.driftDeadband; }
 
-uint64_t MotionGuard::getMotionStartUs() const {
-    return motionStartUs;
-}
+uint64_t MotionGuard::getMotionStartUs() const { return motionStartUs; }

@@ -122,12 +122,12 @@ class PwmController {
      */
     void unlockLedc();
 
-    ledc_channel_t pwmChannel = LEDC_CHANNEL_0;     ///< LEDC channel
-    ledc_timer_bit_t resolution = LEDC_TIMER_10_BIT; ///< PWM resolution
-    uint32_t frequency = 20000;                      ///< Current PWM frequency (Hz)
-    uint32_t minFrequency = 100;                     ///< Minimum allowed frequency (Hz)
-    uint32_t maxFrequency = 100000;                  ///< Maximum allowed frequency (Hz)
-    uint32_t maxDuty = 0;                            ///< Max duty in ticks
+    ledc_channel_t pwmChannel = LEDC_CHANNEL_0;       ///< LEDC channel
+    ledc_timer_bit_t resolution = LEDC_TIMER_10_BIT;  ///< PWM resolution
+    uint32_t frequency = 20000;                       ///< Current PWM frequency (Hz)
+    uint32_t minFrequency = 100;                      ///< Minimum allowed frequency (Hz)
+    uint32_t maxFrequency = 100000;                   ///< Maximum allowed frequency (Hz)
+    uint32_t maxDuty = 0;                             ///< Max duty in ticks
 
     SemaphoreHandle_t ledcMutex = nullptr;  ///< Mutex for LEDC access
     uint32_t ledcMutexTimeoutMs = 50;       ///< Mutex timeout (ms)

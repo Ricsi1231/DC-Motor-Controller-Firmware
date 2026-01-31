@@ -18,9 +18,9 @@ namespace DC_Motor_Controller_Firmware::Control {
  * @brief Configuration for settle detection thresholds.
  */
 struct SettleDetectorConfig {
-    float posTolDeg = 0.3f;         ///< Settle position tolerance (deg).
-    float velTolDegPerSec = 1.0f;   ///< Settle velocity tolerance (deg/s).
-    int countLimit = 5;             ///< Consecutive cycles required to declare settled.
+    float posTolDeg = 0.3f;        ///< Settle position tolerance (deg).
+    float velTolDegPerSec = 1.0f;  ///< Settle velocity tolerance (deg/s).
+    int countLimit = 5;            ///< Consecutive cycles required to declare settled.
 };
 
 /**
