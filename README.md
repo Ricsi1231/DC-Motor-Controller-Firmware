@@ -86,7 +86,7 @@ idf.py flash monitor
 ## License
 
 This project is provided for educational and prototyping purposes.
-All content is (c) 2025 Nagy Richard. Licensing for commercial use may require additional agreements.
+All content is (c) 2026 Nagy Richard. Licensing for commercial use may require additional agreements.
 
 ---
 
