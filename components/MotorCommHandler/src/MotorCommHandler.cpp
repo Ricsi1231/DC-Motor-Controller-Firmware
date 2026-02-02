@@ -83,7 +83,7 @@ void MotorCommHandler::processApplicationLogic() {
         }
     }
 
-    if ((fabsf(encoder->getPositionInDegrees() - targetDegree) <= settledToleranceDeg) && !settled) {
+    if (motor->isMotionDone() && !settled) {
         if (isUSBOpen()) {
             notifyMotorPositionReached();
         }
@@ -153,7 +153,7 @@ void MotorCommHandler::clearTarget() {
     portEXIT_CRITICAL(&spinlock);
 }
 
-void MotorCommHandler::notifyMotorPositionReached() { comm->sendString(MSG_REACHED); }
+void MotorCommHandler::notifyMotorPositionReached() { comm->sendFormattedString("%s\n", MSG_REACHED); }
 
 float MotorCommHandler::getTargetDegrees() {
     portENTER_CRITICAL(&spinlock);

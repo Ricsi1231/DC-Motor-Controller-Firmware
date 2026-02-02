@@ -65,5 +65,7 @@ MotorControllerConfig motorControllerConfig = {
     .maxSpeed = 100.0f,
     .minErrorToMove = 0.2f,
     .countsPerRevolution = 1024,
+    .settle = {.posTolDeg = 2.0f, .velTolDegPerSec = 1.0f, .countLimit = 5},
     .stall = {.stuckPositionEpsilon = 0.05f, .stuckCountLimit = 50, .pidWarmupLimit = 10, .minErrorToMove = 0.2f},
+    .guard = {.motionTimeoutMs = 0, .driftDeadband = 3.0f, .driftHysteresis = 1.0f},
 };

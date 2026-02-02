@@ -618,9 +618,13 @@ void MotorController::update() {
 
     if (stallResult == StallDetector::Result::STALLED) {
         motor->stop();
-        float finalDriftAbs = fabsf(currentTarget - currentPos);
-        bool settledWithinDeadband = (finalDriftAbs <= MotionGuard::getDriftDeadband(controlConfig.guard));
-        motionDone.store(settledWithinDeadband, std::memory_order_relaxed);
+        if (targetMutex != nullptr && xSemaphoreTake(targetMutex, portMAX_DELAY) == pdTRUE) {
+            target = currentPos;
+            xSemaphoreGive(targetMutex);
+        } else {
+            target = currentPos;
+        }
+        motionDone.store(true, std::memory_order_relaxed);
         if (onStallCb) {
             MotorStatus statusSnapshot = getStatus();
             onStallCb(statusSnapshot, onStallUser);

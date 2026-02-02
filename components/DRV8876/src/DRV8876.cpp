@@ -101,6 +101,10 @@ void DRV8876::setDirection(MotorDirection direction) {
         return;
     }
 
+    if (motorDirection == direction) {
+        return;
+    }
+
     motorDirection = direction;
     gpio.setDirection(static_cast<bool>(motorDirection));
     ESP_LOGI(TAG, "Direction=%s", motorDirection == MotorDirection::LEFT ? "LEFT" : "RIGHT");
