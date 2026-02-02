@@ -59,20 +59,20 @@ extern "C" void app_main() {
     constexpr DirectionConfig directionConfig = {.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
 
     constexpr EncoderConfig encoderConfig = {.pinA = GPIO_NUM_1,
-                                      .pinB = GPIO_NUM_2,
-                                      .unitConfig = pcntUnitConfig,
-                                      .pulsesPerRevolution = 1024,
-                                      .filterThresholdNs = 1000,
-                                      .rpmCalcPeriodUs = 100000,
-                                      .maxRpm = 5000,
-                                      .enableWatchPoint = true,
-                                      .watchLowLimit = 0,
-                                      .watchHighLimit = 0,
-                                      .openCollectorInputs = false,
-                                      .rpmBlendThreshold = 10,
-                                      .rpmBlendBand = 3,
-                                      .speedFilter = speedFilterConfig,
-                                      .direction = directionConfig};
+                                             .pinB = GPIO_NUM_2,
+                                             .unitConfig = pcntUnitConfig,
+                                             .pulsesPerRevolution = 1024,
+                                             .filterThresholdNs = 1000,
+                                             .rpmCalcPeriodUs = 100000,
+                                             .maxRpm = 5000,
+                                             .enableWatchPoint = true,
+                                             .watchLowLimit = 0,
+                                             .watchHighLimit = 0,
+                                             .openCollectorInputs = false,
+                                             .rpmBlendThreshold = 10,
+                                             .rpmBlendBand = 3,
+                                             .speedFilter = speedFilterConfig,
+                                             .direction = directionConfig};
 
     Encoder encoder(encoderConfig);
     initEncoderSimulation();

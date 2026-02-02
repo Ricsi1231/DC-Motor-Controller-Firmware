@@ -175,13 +175,13 @@ class MotorCommHandler : public IMotorCommHandler {
     IMotorController* motor = nullptr;  ///< Optional motor controller for application logic
     IEncoder* encoder = nullptr;        ///< Optional encoder for position feedback
 
-    float logicKp = 0.0f;        ///< Cached PID kp for application logic
-    float logicKi = 0.0f;        ///< Cached PID ki for application logic
-    float logicKd = 0.0f;        ///< Cached PID kd for application logic
-    float currentPos = 0.0f;     ///< Current encoder position in degrees
-    float offset = 0.0f;         ///< Target offset received from USB
-    float targetDegree = 0.0f;   ///< Computed absolute target in degrees
-    bool settled = false;         ///< Flag: motor has settled at target
+    float logicKp = 0.0f;               ///< Cached PID kp for application logic
+    float logicKi = 0.0f;               ///< Cached PID ki for application logic
+    float logicKd = 0.0f;               ///< Cached PID kd for application logic
+    float currentPos = 0.0f;            ///< Current encoder position in degrees
+    float offset = 0.0f;                ///< Target offset received from USB
+    float targetDegree = 0.0f;          ///< Computed absolute target in degrees
+    bool settled = false;               ///< Flag: motor has settled at target
     bool getPIDValuesFirstTime = true;  ///< Flag: initial PID value read pending
 
     static constexpr float settledToleranceDeg = 1.0f;  ///< Position tolerance for settled detection

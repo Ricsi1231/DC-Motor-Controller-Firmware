@@ -20,8 +20,8 @@ namespace DC_Motor_Controller_Firmware {
  * @brief Logical motor rotation direction.
  */
 enum class MotorDirection : bool {
-    LEFT = false,   ///< Counter-clockwise direction
-    RIGHT = true    ///< Clockwise direction
+    LEFT = false,  ///< Counter-clockwise direction
+    RIGHT = true   ///< Clockwise direction
 };
 
 /**

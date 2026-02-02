@@ -19,13 +19,13 @@ namespace DC_Motor_Controller_Firmware {
  * @brief Snapshot of the motor controller state at a point in time.
  */
 struct MotorStatus {
-    float target;      ///< Target position in degrees
-    float position;    ///< Current position in degrees
-    float error;       ///< Position error (target - position) in degrees
-    float velocity;    ///< Estimated angular velocity in deg/s
-    float pidOutput;   ///< Last PID controller output value
-    int stuckCount;    ///< Stuck/stall detection counter
-    bool motionDone;   ///< True if motion is complete and settled
+    float target;     ///< Target position in degrees
+    float position;   ///< Current position in degrees
+    float error;      ///< Position error (target - position) in degrees
+    float velocity;   ///< Estimated angular velocity in deg/s
+    float pidOutput;  ///< Last PID controller output value
+    int stuckCount;   ///< Stuck/stall detection counter
+    bool motionDone;  ///< True if motion is complete and settled
 };
 
 /**

@@ -32,10 +32,10 @@ esp_err_t USB::init() {
     };
 
     tinyusb_config_cdcacm_t cdcAcmConfig = {.cdc_port = TINYUSB_CDC_ACM_0,
-                                             .callback_rx = &usbCallback,
-                                             .callback_rx_wanted_char = NULL,
-                                             .callback_line_state_changed = NULL,
-                                             .callback_line_coding_changed = NULL};
+                                            .callback_rx = &usbCallback,
+                                            .callback_rx_wanted_char = NULL,
+                                            .callback_line_state_changed = NULL,
+                                            .callback_line_coding_changed = NULL};
 
     returnValue = tinyusb_driver_install(&usbDriverConfig);
 

@@ -344,9 +344,9 @@ class MotorController : public IMotorController {
     void setOnLimitHit(MotionEventCallback cb, void* user = nullptr) override;
 
   private:
-    std::unique_ptr<DRV8876::DRV8876> motor;      ///< Owned motor driver instance.
-    std::unique_ptr<Encoder::Encoder> encoder;    ///< Owned encoder instance.
-    std::unique_ptr<PID::PIDController> pid;      ///< Owned PID controller instance.
+    std::unique_ptr<DRV8876::DRV8876> motor;    ///< Owned motor driver instance.
+    std::unique_ptr<Encoder::Encoder> encoder;  ///< Owned encoder instance.
+    std::unique_ptr<PID::PIDController> pid;    ///< Owned PID controller instance.
 
     /** @brief User-defined motion parameters and sub-component configurations. */
     MotorControllerConfig config;

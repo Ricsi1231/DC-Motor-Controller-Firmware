@@ -552,7 +552,8 @@ void MotorController::update() {
     float feedForward = controlConfig.Kff_pos * referencePosition + controlConfig.Kff_vel * referenceVelocityPercent;
 
     if (hit(lastPidLogUs, nowUs, 500)) {
-        ESP_LOGV(TAG, "ff: Kpos=%.4f Kvel=%.4f refPos=%.3f refVel%%=%.2f ff=%.3f", controlConfig.Kff_pos, controlConfig.Kff_vel, referencePosition, referenceVelocityPercent, feedForward);
+        ESP_LOGV(TAG, "ff: Kpos=%.4f Kvel=%.4f refPos=%.3f refVel%%=%.2f ff=%.3f", controlConfig.Kff_pos, controlConfig.Kff_vel, referencePosition,
+                 referenceVelocityPercent, feedForward);
     }
 
     float combined = clampToPercentRange(pidSignal + feedForward);

@@ -19,8 +19,8 @@ namespace DC_Motor_Controller_Firmware {
  * @brief Logical encoder rotation direction.
  */
 enum class EncoderDirection : bool {
-    LEFT = true,    ///< Counter-clockwise direction
-    RIGHT = false   ///< Clockwise direction
+    LEFT = true,   ///< Counter-clockwise direction
+    RIGHT = false  ///< Clockwise direction
 };
 
 /**
@@ -28,12 +28,12 @@ enum class EncoderDirection : bool {
  * @brief Runtime statistics snapshot for an encoder.
  */
 struct EncoderStats {
-    int64_t totalCounts = 0;     ///< Accumulated tick count since last reset
-    int64_t lastDelta = 0;       ///< Tick delta from the most recent sample period
-    float rpmRaw = 0.0f;        ///< Unfiltered instantaneous RPM estimate
-    float rpmFiltered = 0.0f;   ///< Filtered RPM estimate
-    uint32_t overflows = 0;     ///< Number of counter overflow events
-    uint32_t missedEdges = 0;   ///< Number of missed edge events
+    int64_t totalCounts = 0;   ///< Accumulated tick count since last reset
+    int64_t lastDelta = 0;     ///< Tick delta from the most recent sample period
+    float rpmRaw = 0.0f;       ///< Unfiltered instantaneous RPM estimate
+    float rpmFiltered = 0.0f;  ///< Filtered RPM estimate
+    uint32_t overflows = 0;    ///< Number of counter overflow events
+    uint32_t missedEdges = 0;  ///< Number of missed edge events
 };
 
 /**
