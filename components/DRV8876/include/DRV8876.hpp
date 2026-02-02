@@ -4,12 +4,14 @@
  *
  * Provides high-level interface for controlling a DC motor using the DRV8876
  * H-bridge driver via ESP32 GPIO and LEDC PWM peripherals.
+ *
+ * Internally delegates to sub-components: GpioController, FaultHandler,
+ * PwmController, and MotionRamp.
  */
 
 #pragma once
 
 #include <inttypes.h>
-#include <atomic>
 #include <functional>
 
 #include "esp_log.h"
@@ -20,17 +22,16 @@
 #include "driver/gpio.h"
 #include "driver/ledc.h"
 
+#include "FaultHandler.hpp"
+#include "GpioController.hpp"
+#include "IMotorDriver.hpp"
+#include "MotionRamp.hpp"
+#include "PwmController.hpp"
+
 namespace DC_Motor_Controller_Firmware {
 namespace DRV8876 {
 
-/**
- * @enum Direction
- * @brief Enumeration for motor rotation direction.
- */
-enum class Direction : bool {
-    LEFT = false, /**< Motor turns left / counterclockwise */
-    RIGHT = true  /**< Motor turns right / clockwise */
-};
+using Direction = MotorDirection;
 
 struct DRV8876Config {
     gpio_num_t phPin;           ///< Direction pin
@@ -52,23 +53,19 @@ struct DRV8876Config {
  * @class DRV8876
  * @brief Class to control a DRV8876 H-bridge DC motor driver via ESP32.
  */
-class DRV8876 {
+class DRV8876 : public IMotorDriver {
   public:
     /**
      * @brief Constructor for DRV8876 class.
      *
-     * @param phPin GPIO for PH (direction control)
-     * @param enPin GPIO for EN (PWM enable)
-     * @param nFault GPIO for nFAULT signal (active low fault flag)
-     * @param nSleep GPIO for driver sleep mode (need active high to enable the driver)
-     * @param pwmChannel LEDC channel used for PWM
+     * @param config Configuration structure with pin assignments and PWM parameters.
      */
-    DRV8876(const DRV8876Config& config);
+    explicit DRV8876(const DRV8876Config& config);
 
     /**
      * @brief Destructor.
      */
-    ~DRV8876();
+    ~DRV8876() override;
 
     /**
      * @brief Deleted copy constructor to prevent copying of DRV8876 instance.
@@ -98,143 +95,105 @@ class DRV8876 {
      *
      * @return esp_err_t ESP_OK if success, else error code.
      */
-    esp_err_t init();
+    esp_err_t init() override;
 
     /**
-     * @brief Retrieve the current driver configuration.
-     *
-     * Provides a copy of the configuration structure that was
-     * used to initialize this DRV8876 instance.
-     *
-     * @return DRV8876Config structure with pin assignments,
-     *         timer/channel setup, and other parameters.
+     * @brief Get the current DRV8876 configuration.
+     * @return Copy of DRV8876Config structure.
      */
     DRV8876Config getConfig() const;
 
     /**
-     * @brief Set motor rotation direction.
-     *
+     * @brief Set the motor rotation direction.
      * @param direction Desired motor direction.
      */
-    void setDirection(Direction direction);
+    void setDirection(MotorDirection direction) override;
 
     /**
-     * @brief Reverse current motor direction.
+     * @brief Reverse the current motor direction.
      */
-    void reverseDirection();
+    void reverseDirection() override;
 
     /**
-     * @brief Safely set motor rotation direction.
-     *
-     * Ensures that direction changes are applied in a controlled manner,
-     * preventing potential glitches or unsafe transitions on the PH pin.
-     *
-     * @param direction Desired motor direction.
-     * @return ESP_OK on success, or an error code from lower-level drivers.
-     */
-    esp_err_t setDirectionSafe(Direction direction);
-
-    /**
-     * @brief Safely reverse the current motor rotation direction.
-     *
-     * Reads the current state and applies the opposite direction
-     * using safe transition logic.
-     *
-     * @return ESP_OK on success, or an error code from lower-level drivers.
-     */
-    esp_err_t reverseDirectionSafe();
-
-    /**
-     * @brief Set motor speed using PWM.
-     *
-     * @param speed Speed (0-100% duty).
-     * @return esp_err_t ESP_OK if success, else error.
-     */
-    esp_err_t setSpeed(uint8_t speed);
-
-    /**
-     * @brief Gradually change motor speed to a target value over a given time.
-     *
-     * This function ramps from the current speed to the target speed in small
-     * increments so that the full transition takes approximately rampTimeMs.
-     *
-     * @param targetPercent Desired motor speed in percent [0–100].
-     * @param rampTimeMs    Total time for the ramp (milliseconds).
-     * @return esp_err_t ESP_OK if successful, or error code if PWM update fails.
-     */
-    esp_err_t setSpeed(uint8_t targetPercent, uint32_t rampTimeMs);
-
-    /**
-     * @brief Immediately stop motor.
-     */
-    esp_err_t stop();
-
-    /**
-     * @brief Coast the motor (disable outputs, motor spins freely).
-     *
-     * Unlike stop(), this does not actively drive the motor with 0% duty.
-     * The motor is left floating, resulting in no torque and free run-down.
-     *
+     * @brief Safely change direction by ramping speed down, switching, then ramping back up.
+     * @param direction Desired new motor direction.
      * @return esp_err_t ESP_OK if success.
      */
-    esp_err_t coast();
+    esp_err_t setDirectionSafe(MotorDirection direction) override;
 
     /**
-     * @brief Brake the motor (short both motor terminals).
-     *
-     * Forces both outputs low, providing an electrical brake.
-     * The motor stops faster than coast() but generates heating in windings.
-     *
+     * @brief Safely reverse direction by ramping speed down, switching, then ramping back up.
      * @return esp_err_t ESP_OK if success.
      */
-    esp_err_t brake();
+    esp_err_t reverseDirectionSafe() override;
 
     /**
-     * @brief Get last set motor speed.
-     *
-     * @return uint8_t Motor speed percentage (0-100).
+     * @brief Set motor speed as a percentage (0–100%).
+     * @param speed Target speed in percent.
+     * @return esp_err_t ESP_OK if success, ESP_ERR_INVALID_ARG if out of range.
      */
-    uint8_t getMotorSpeed() const;
+    esp_err_t setSpeed(uint8_t speed) override;
 
     /**
-     * @brief Get current motor direction.
-     *
-     * @return Direction Current direction.
+     * @brief Set motor speed with a timed ramp transition.
+     * @param targetPercent Target speed in percent.
+     * @param rampTimeMs Duration of the ramp in milliseconds.
+     * @return esp_err_t ESP_OK if success.
      */
-    Direction getMotorDirection() const;
+    esp_err_t setSpeed(uint8_t targetPercent, uint32_t rampTimeMs) override;
 
     /**
-     * @brief Check if motor is currently running.
-     *
-     * @return true If speed > 0.
-     * @return false If stopped.
+     * @brief Stop the motor (set duty to zero).
+     * @return esp_err_t ESP_OK if success.
      */
-    bool motorIsRunning() const;
+    esp_err_t stop() override;
 
     /**
-     * @brief Check if fault is triggered (nFAULT = LOW).
-     *
-     * @return true If fault occurred.
-     * @return false No fault.
+     * @brief Set the motor to coast mode (outputs disabled, free spin).
+     * @return esp_err_t ESP_OK if success.
      */
-    bool isFaultTriggered() const;
+    esp_err_t coast() override;
 
     /**
-     * @brief Clear internal fault flag (after user handles fault).
+     * @brief Set the motor to brake mode (outputs shorted).
+     * @return esp_err_t ESP_OK if success.
      */
-    void clearFaultFlag();
+    esp_err_t brake() override;
 
     /**
-     * @brief Check and clear the fault status.
-     *
-     * Reads the current fault flag, then clears it if set.
-     * This allows the application to acknowledge and reset
-     * fault conditions in the driver.
-     *
-     * @return true if a fault was detected before clearing,
-     *         false if no fault was present.
+     * @brief Get the current motor speed.
+     * @return Motor speed in percent (0–100).
      */
-    bool getAndClearFault();
+    uint8_t getMotorSpeed() const override;
+
+    /**
+     * @brief Get the current motor direction.
+     * @return MotorDirection enum value.
+     */
+    MotorDirection getMotorDirection() const override;
+
+    /**
+     * @brief Check if the motor is currently running.
+     * @return true if motor speed > 0.
+     */
+    bool motorIsRunning() const override;
+
+    /**
+     * @brief Check if a fault condition is currently active.
+     * @return true if fault is triggered.
+     */
+    bool isFaultTriggered() const override;
+
+    /**
+     * @brief Clear the fault flag.
+     */
+    void clearFaultFlag() override;
+
+    /**
+     * @brief Get and clear the fault flag atomically.
+     * @return true if a fault was present (now cleared).
+     */
+    bool getAndClearFault() override;
 
     /**
      * @brief Set PWM frequency and resolution.
@@ -278,131 +237,36 @@ class DRV8876 {
     uint32_t getPwmMaxFrequency() const;
 
     /**
-     * @brief Register a user callback to be invoked on fault events.
-     *
-     * The callback will be executed when a fault condition is detected.
-     * This allows the application to respond asynchronously (e.g., stop motor,
-     * log error, trigger recovery).
-     *
-     * @param cb Callback function to invoke on fault. Pass nullptr to disable.
+     * @brief Register a callback to be invoked when a fault is detected.
+     * @param cb Callback function.
      */
-    void setFaultCallback(const std::function<void()>& cb);
+    void setFaultCallback(const std::function<void()>& cb) override;
 
     /**
-     * @brief Process a pending fault event.
-     *
-     * This should be called from the driver's internal logic when a fault
-     * interrupt or detection occurs. If a fault callback is registered,
-     * it will be invoked here.
+     * @brief Process a pending fault event (call from task context).
      */
-    void processFaultEvent();
+    void processFaultEvent() override;
 
   private:
-    /**
-     * @brief Set PWM duty cycle based on speed (0–100%).
-     *
-     * @param pwmChannel LEDC channel
-     * @param duty Duty in percentage
-     * @return esp_err_t ESP_OK if success.
-     */
-    esp_err_t setPwmDuty(ledc_channel_t pwmChannel, uint8_t duty);
-
-    /**
-     * @brief Set PWM duty cycle directly in timer ticks.
-     *
-     * Writes the specified number of ticks to the LEDC channel’s
-     * duty register. Use this when precise tick-level control is required.
-     *
-     * @param pwmChannel LEDC channel to configure.
-     * @param ticks Number of ticks corresponding to desired duty cycle.
-     * @return esp_err_t ESP_OK if successful, or error code otherwise.
-     */
-    esp_err_t setPwmDutyTicks(ledc_channel_t pwmChannel, uint32_t ticks);
-
-    /**
-     * @brief Convert duty percentage (0–100%) into timer ticks.
-     *
-     * Calculates the equivalent tick value for a given duty percentage
-     * based on the current LEDC timer configuration.
-     *
-     * @param percent Duty cycle in percentage (0–100).
-     * @return uint32_t Number of ticks corresponding to the percentage.
-     */
-    uint32_t percentToTicks(uint8_t percent);
-
-    /**
-     * @brief Gradually change motor speed to a target percentage.
-     *
-     * This function ramps the current motor speed up or down toward the
-     * specified target, using step size and delay values configured in
-     * DRV8876Config (rampStepPercent and rampStepDelayMs).
-     *
-     * - If the target speed is higher than the current speed, the motor will
-     *   accelerate in increments until it reaches the target.
-     * - If the target speed is lower, the motor will decelerate gradually down
-     *   to the target.
-     *
-     * @param targetPercent Desired motor speed in percent [0–100].
-     * @return esp_err_t ESP_OK if successful, or error code if setting PWM fails.
-     */
-    esp_err_t rampTo(uint8_t targetPercent);
-
-    /**
-     * @brief Acquire exclusive access to the LEDC peripheral.
-     *
-     * Attempts to lock the internal LEDC mutex within the specified timeout.
-     * Ensures that only one task can configure or update LEDC resources
-     * related to this driver at a time.
-     *
-     * @param timeoutMs Timeout in milliseconds to wait for the lock.
-     *                  Use portMAX_DELAY for indefinite wait.
-     * @return true if the lock was successfully acquired, false on timeout or error.
-     */
-    bool lockLedc(uint32_t timeoutMs);
-
-    /**
-     * @brief Release previously acquired LEDC lock.
-     *
-     * Should be called after finishing LEDC operations
-     * to allow other tasks to access the peripheral.
-     */
-    void unlockLedc();
-
-    /**
-     * @brief ISR for handling fault interrupt.
-     *
-     * @param arg Pointer to DRV8876 instance.
-     */
-    static IRAM_ATTR void faultISR(void* arg);
-
     DRV8876Config config;  ///< Config for DRV8876 motor driver
+
+    GpioController gpio;  ///< GPIO pin management
+    PwmController pwm;    ///< PWM/LEDC management
+    FaultHandler fault;   ///< Fault detection and callback
+    MotionRamp ramp;      ///< Speed ramping logic
 
     Direction motorDirection;  ///< Current motor direction
     uint8_t motorSpeed;        ///< Current speed (0–100)
 
-    std::atomic_bool faultTriggered{false};  ///< Fault flag
-
     const uint8_t minMotorSpeed = 0;    ///< Min motor speed
     const uint8_t maxMotorSpeed = 100;  ///< Max motor speed
+    const uint8_t motorStop = 0;        ///< Constant for stop signal
 
-    const uint32_t MIN_PWM_FREQ = 1000;   ///< Minimum PWM frequency allowed
-    const uint32_t MAX_PWM_FREQ = 30000;  ///< Maximum PWM frequency allowed
-
-    uint32_t maxDuty = 0;  ///< Maximum duty cycle value in timer ticks
-
-    const uint8_t motorStop = 0;  ///< Constant for stop signal
-
-    uint8_t previousSpeedValue = 0;
-
-    bool initialized = false;  ///< DRV class initialized flag
-
-    bool enableMotorStopedLog = true;
+    uint8_t previousSpeedValue = 0;    ///< Previous speed for log suppression
+    bool initialized = false;          ///< DRV class initialized flag
+    bool enableMotorStopedLog = true;  ///< Log suppression for stop events
 
     static constexpr char TAG[] = "DRV8876";  ///< Logging tag
-
-    SemaphoreHandle_t ledcMutex = nullptr;  ///< Mutex for synchronizing LEDC access
-    uint32_t ledcMutexTimeoutMs = 50;       ///< Default timeout (ms) when waiting for LEDC mutex
-    std::function<void()> faultCallback;    ///< User-defined callback invoked on fault events
 };
 
 }  // namespace DRV8876

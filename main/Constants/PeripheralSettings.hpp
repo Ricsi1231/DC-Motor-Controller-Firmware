@@ -1,24 +1,57 @@
+#pragma once
+
+#include "DRV8876.hpp"
+#include "Encoder.hpp"
 #include "PID.hpp"
 #include "motorControl.hpp"
 
-#pragma once
-
+using namespace DC_Motor_Controller_Firmware::DRV8876;
+using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
 
-ledc_channel_t PWM_CHANNEL = LEDC_CHANNEL_0;
+DRV8876Config motorDriverConfig = {
+    .phPin = GPIO_NUM_4,
+    .enPin = GPIO_NUM_5,
+    .nFault = GPIO_NUM_6,
+    .nSleep = GPIO_NUM_7,
+    .pwmChannel = LEDC_CHANNEL_0,
+    .resolution = LEDC_TIMER_10_BIT,
+    .frequency = 20000,
+    .minFrequency = 100,
+    .maxFrequency = 100000,
+    .rampStepPercent = 5,
+    .rampStepDelayMs = 10,
+    .minEffectivePwmPercent = 0,
+};
 
-uint16_t ppr = 1024;
-pcnt_unit_config_t pcntUnit = {.low_limit = -1000,
-                               .high_limit = 1000,
-                               .flags = {
-                                   .accum_count = true,
-                               }};
+EncoderConfig encoderConfig = {
+    .pinA = GPIO_NUM_2,
+    .pinB = GPIO_NUM_1,
+    .unitConfig = {.low_limit = -1000,
+                   .high_limit = 1000,
+                   .flags =
+                       {
+                           .accum_count = true,
+                       }},
+    .pulsesPerRevolution = 1024,
+    .filterThresholdNs = 0,
+    .rpmCalcPeriodUs = 10000,
+    .maxRpm = 0,
+    .enableWatchPoint = true,
+    .watchLowLimit = 0,
+    .watchHighLimit = 0,
+    .openCollectorInputs = false,
+    .rpmBlendThreshold = 60,
+    .rpmBlendBand = 20,
+    .speedFilter = {.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 0.0f, .sampleRateHz = 0},
+    .direction = {.hysteresisThreshold = 2, .debounceTimeMs = 50, .enableHysteresis = true},
+};
 
-PidConfig defaultConfig = {
+PidConfig pidConfig = {
     .kp = 1.0f,
-    .ki = 0.04f,
-    .kd = 0.02f,
+    .ki = 0.1f,
+    .kd = 0.08f,
     .maxOutput = 100.0f,
     .maxIntegral = 300.0f,
     .errorEpsilon = 0.1f,
@@ -27,12 +60,12 @@ PidConfig defaultConfig = {
     .stuckTimeoutSec = 0.5f,
 };
 
-MotorControllerConfig motorCfg = {
+MotorControllerConfig motorControllerConfig = {
     .minSpeed = 2.0f,
     .maxSpeed = 100.0f,
     .minErrorToMove = 0.2f,
-    .driftThreshold = 1.0f,
-    .stuckPositionEpsilon = 0.05f,
-    .stuckCountLimit = 50,
-    .pidWarmupLimit = 10,
+    .countsPerRevolution = 1024,
+    .settle = {.posTolDeg = 2.0f, .velTolDegPerSec = 1.0f, .countLimit = 5},
+    .stall = {.stuckPositionEpsilon = 0.05f, .stuckCountLimit = 50, .pidWarmupLimit = 10, .minErrorToMove = 0.2f},
+    .guard = {.motionTimeoutMs = 0, .driftDeadband = 3.0f, .driftHysteresis = 1.0f},
 };

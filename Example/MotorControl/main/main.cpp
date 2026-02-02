@@ -21,8 +21,8 @@ constexpr gpio_num_t PH_PIN = GPIO_NUM_4;
 constexpr gpio_num_t EN_PIN = GPIO_NUM_5;
 constexpr gpio_num_t FAULT_PIN = GPIO_NUM_6;
 constexpr gpio_num_t SLEEP_PIN = GPIO_NUM_7;
-constexpr gpio_num_t ENCODER_A = GPIO_NUM_1;
-constexpr gpio_num_t ENCODER_B = GPIO_NUM_2;
+constexpr gpio_num_t ENCODER_A = GPIO_NUM_2;
+constexpr gpio_num_t ENCODER_B = GPIO_NUM_1;
 
 constexpr DRV8876Config motorConfig{.phPin = PH_PIN,
                                     .enPin = EN_PIN,
@@ -30,17 +30,22 @@ constexpr DRV8876Config motorConfig{.phPin = PH_PIN,
                                     .nSleep = SLEEP_PIN,
                                     .pwmChannel = LEDC_CHANNEL_0,
                                     .resolution = LEDC_TIMER_10_BIT,
-                                    .frequency = 20000};
+                                    .frequency = 20000,
+                                    .minFrequency = 100,
+                                    .maxFrequency = 100000,
+                                    .rampStepPercent = 5,
+                                    .rampStepDelayMs = 10,
+                                    .minEffectivePwmPercent = 3};
 
-constexpr pcnt_unit_config_t unitCfg{.low_limit = -32767, .high_limit = 32767, .intr_priority = 0, .flags = {.accum_count = true}};
+constexpr pcnt_unit_config_t pcntUnitConfig{.low_limit = -32767, .high_limit = 32767, .intr_priority = 0, .flags = {.accum_count = true}};
 
-constexpr SpeedFilterConfig speedFilterCfg{.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 2.0f, .sampleRateHz = 100};
+constexpr SpeedFilterConfig speedFilterConfig{.filterType = SpeedFilterType::EMA, .emaAlpha = 0.3f, .iirCutoffHz = 2.0f, .sampleRateHz = 100};
 
-constexpr DirectionConfig directionCfg{.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
+constexpr DirectionConfig directionConfig{.hysteresisThreshold = 8, .debounceTimeMs = 100, .enableHysteresis = true};
 
-constexpr EncoderConfig encCfg{.pinA = ENCODER_A,
+constexpr EncoderConfig encoderConfig{.pinA = ENCODER_A,
                                .pinB = ENCODER_B,
-                               .unitConfig = unitCfg,
+                               .unitConfig = pcntUnitConfig,
                                .pulsesPerRevolution = 1024,
                                .filterThresholdNs = 1000,
                                .rpmCalcPeriodUs = 100000,
@@ -51,8 +56,8 @@ constexpr EncoderConfig encCfg{.pinA = ENCODER_A,
                                .openCollectorInputs = false,
                                .rpmBlendThreshold = 10,
                                .rpmBlendBand = 3,
-                               .speedFilter = speedFilterCfg,
-                               .direction = directionCfg};
+                               .speedFilter = speedFilterConfig,
+                               .direction = directionConfig};
 
 constexpr PidConfig pidConfig = {.kp = 2.5f,
                                  .ki = 0.08f,
@@ -64,31 +69,19 @@ constexpr PidConfig pidConfig = {.kp = 2.5f,
                                  .errorTimeoutSec = 2.0f,
                                  .stuckTimeoutSec = 1.0f};
 
-constexpr MotorControllerConfig motorCfg = {.minSpeed = 3.0f,
-                                            .maxSpeed = 95.0f,
-                                            .minErrorToMove = 0.3f,
-                                            .driftThreshold = 1.0f,
-                                            .driftDeadband = 0.8f,
-                                            .driftHysteresis = 0.4f,
-                                            .stuckPositionEpsilon = 0.1f,
-                                            .stuckCountLimit = 30,
-                                            .pidWarmupLimit = 15,
-                                            .countsPerRevolution = 1024,
-                                            .motionTimeoutMs = 5000,
-                                            .motionProfileEnabled = true,
-                                            .motionProfileType = MotionProfileType::S_CURVE,
-                                            .accelLimitPctPerSec = 200.0f,
-                                            .jerkLimitPctPerSec2 = 4000.0f,
-                                            .Kff_pos = 0.02f,
-                                            .Kff_vel = 0.15f,
-                                            .settlePosTolDeg = 0.5f,
-                                            .settleVelTolDegPerSec = 2.0f,
-                                            .settleCountLimit = 8};
+constexpr MotorControllerConfig motorControllerConfig = {
+    .minSpeed = 3.0f,
+    .maxSpeed = 95.0f,
+    .minErrorToMove = 0.3f,
+    .countsPerRevolution = 1024,
+    .Kff_pos = 0.02f,
+    .Kff_vel = 0.15f,
+    .profiler = {.enabled = true, .type = MotionProfileType::S_CURVE, .accelLimitPctPerSec = 200.0f, .jerkLimitPctPerSec2 = 4000.0f, .maxSpeed = 95.0f},
+    .settle = {.posTolDeg = 0.5f, .velTolDegPerSec = 2.0f, .countLimit = 8},
+    .stall = {.stuckPositionEpsilon = 0.1f, .stuckCountLimit = 30, .pidWarmupLimit = 15, .minErrorToMove = 0.3f},
+    .guard = {.motionTimeoutMs = 5000, .driftDeadband = 0.8f, .driftHysteresis = 0.4f}};
 
-DRV8876 motor(motorConfig);
-Encoder encoder(encCfg);
-PIDController pid(pidConfig);
-MotorController motorController(encoder, motor, pid, motorCfg);
+MotorController motorController(motorConfig, encoderConfig, pidConfig, motorControllerConfig);
 
 struct ExampleState {
     int currentSequenceStep = 0;
@@ -329,24 +322,9 @@ void demoSequenceTask(void* param) {
 extern "C" void app_main() {
     ESP_LOGI(TAG, "Initializing motor controller example");
 
-    esp_err_t result = encoder.init();
+    esp_err_t result = motorController.init();
     if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize encoder: %s", esp_err_to_name(result));
-        return;
-    }
-
-    result = encoder.start();
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start encoder: %s", esp_err_to_name(result));
-        return;
-    }
-
-    encoder.setInverted(false);
-    encoder.setGearRatio(1.0f);
-
-    result = motor.init();
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize motor: %s", esp_err_to_name(result));
+        ESP_LOGE(TAG, "Failed to initialize motor controller: %s", esp_err_to_name(result));
         return;
     }
 

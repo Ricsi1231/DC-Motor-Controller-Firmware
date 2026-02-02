@@ -211,14 +211,34 @@ void RGBLed::setRGBColor(uint8_t red, uint8_t green, uint8_t blue) {
     uint32_t scaledGreen = static_cast<uint32_t>(green * brightness);
     uint32_t scaledBlue = static_cast<uint32_t>(blue * brightness);
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.redPwmChannel, scaledRed);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.redPwmChannel);
+    esp_err_t ret = ESP_OK;
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.greenPwmChannel, scaledGreen);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.greenPwmChannel);
+    ret = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.redPwmChannel, scaledRed);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set RED duty: %s", esp_err_to_name(ret));
+    }
+    ret = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.redPwmChannel);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to update RED duty: %s", esp_err_to_name(ret));
+    }
 
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, config.bluePwmChannel, scaledBlue);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, config.bluePwmChannel);
+    ret = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.greenPwmChannel, scaledGreen);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set GREEN duty: %s", esp_err_to_name(ret));
+    }
+    ret = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.greenPwmChannel);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to update GREEN duty: %s", esp_err_to_name(ret));
+    }
+
+    ret = ledc_set_duty(LEDC_LOW_SPEED_MODE, config.bluePwmChannel, scaledBlue);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to set BLUE duty: %s", esp_err_to_name(ret));
+    }
+    ret = ledc_update_duty(LEDC_LOW_SPEED_MODE, config.bluePwmChannel);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to update BLUE duty: %s", esp_err_to_name(ret));
+    }
 
     ledStatus = (scaledRed || scaledGreen || scaledBlue) ? 1 : 0;
 }

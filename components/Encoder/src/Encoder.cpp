@@ -7,7 +7,6 @@ namespace DC_Motor_Controller_Firmware {
 namespace Encoder {
 
 static const char* TAG = "ENCODER";
-static pcnt_unit_handle_t s_pcntUnit = nullptr;
 
 static inline int clampToPcntRange(int value) {
     const int kMax = 32700;
@@ -93,6 +92,7 @@ Encoder::Encoder(Encoder&& other) noexcept
       invertedWiring(other.invertedWiring),
       swappedAB(other.swappedAB),
       gearRatio(other.gearRatio),
+      pcntUnit(other.pcntUnit),
       chanA(other.chanA),
       chanB(other.chanB),
       timer(other.timer),
@@ -107,6 +107,7 @@ Encoder::Encoder(Encoder&& other) noexcept
       speedEstimator(other.speedEstimator),
       directionDetector(other.directionDetector) {
     ESP_LOGI(TAG, "Encoder move constructor");
+    other.pcntUnit = nullptr;
     other.chanA = nullptr;
     other.chanB = nullptr;
     other.timer = nullptr;
@@ -132,6 +133,8 @@ Encoder& Encoder::operator=(Encoder&& other) noexcept {
         invertedWiring = other.invertedWiring;
         swappedAB = other.swappedAB;
         gearRatio = other.gearRatio;
+        pcntUnit = other.pcntUnit;
+        other.pcntUnit = nullptr;
         chanA = other.chanA;
         other.chanA = nullptr;
         chanB = other.chanB;
@@ -271,13 +274,13 @@ esp_err_t Encoder::stop() {
         ESP_LOGD(TAG, "Timer stopped");
     }
 
-    esp_err_t result = pcnt_unit_stop(s_pcntUnit);
+    esp_err_t result = pcnt_unit_stop(pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_stop failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
     }
 
-    result = pcnt_unit_disable(s_pcntUnit);
+    result = pcnt_unit_disable(pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_disable failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -300,7 +303,7 @@ esp_err_t Encoder::resetPosition() {
     lastEdgeAccumCount = 0;
     lastEdgeTimestampUs = esp_timer_get_time();
 
-    const esp_err_t result = pcnt_unit_clear_count(s_pcntUnit);
+    const esp_err_t result = pcnt_unit_clear_count(pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_clear_count failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -344,7 +347,7 @@ int32_t Encoder::getPositionTicks() const noexcept {
 
     do {
         baseBefore = baseCount;
-        pcnt_unit_get_count(s_pcntUnit, &countSnapshot);
+        pcnt_unit_get_count(pcntUnit, &countSnapshot);
         baseAfter = baseCount;
     } while (baseBefore != baseAfter);
 
@@ -368,7 +371,7 @@ float Encoder::getPositionInDegrees() const noexcept {
 
     do {
         baseBefore = baseCount;
-        pcnt_unit_get_count(s_pcntUnit, &countSnapshot);
+        pcnt_unit_get_count(pcntUnit, &countSnapshot);
         baseAfter = baseCount;
     } while (baseBefore != baseAfter);
 
@@ -403,7 +406,7 @@ int32_t Encoder::getRpmRounded() const noexcept {
     return rounded;
 }
 
-motorDirection Encoder::getMotorDirection() const noexcept {
+EncoderDirection Encoder::getMotorDirection() const noexcept {
     if (!initialized || !encoderConfig.direction.enableHysteresis) {
         ESP_LOGD(TAG, "Using raw direction (not init or hysteresis disabled)");
         return getMotorDirectionRaw();
@@ -415,7 +418,7 @@ motorDirection Encoder::getMotorDirection() const noexcept {
 
     do {
         baseBefore = baseCount;
-        pcnt_unit_get_count(s_pcntUnit, &countSnapshot);
+        pcnt_unit_get_count(pcntUnit, &countSnapshot);
         baseAfter = baseCount;
     } while (baseBefore != baseAfter);
 
@@ -428,7 +431,7 @@ motorDirection Encoder::getMotorDirection() const noexcept {
     return dir;
 }
 
-motorDirection Encoder::getMotorDirectionRaw() const noexcept {
+EncoderDirection Encoder::getMotorDirectionRaw() const noexcept {
     const float rpm = getRpm();
     motorDirection dir = (rpm < 0.0f) ? motorDirection::LEFT : motorDirection::RIGHT;
     ESP_LOGD(TAG, "Raw motor direction: %s (RPM=%.2f)", dir == motorDirection::LEFT ? "LEFT" : "RIGHT", rpm);
@@ -512,14 +515,14 @@ EncoderStats Encoder::getStats() const noexcept { return stats; }
 esp_err_t Encoder::setGlitchFilterNs(uint32_t ns) {
     ESP_LOGI(TAG, "Setting glitch filter to %" PRIu32 " ns", ns);
 
-    if (!initialized || s_pcntUnit == nullptr) {
+    if (!initialized || pcntUnit == nullptr) {
         encoderConfig.filterThresholdNs = ns;
         ESP_LOGD(TAG, "Storing filter setting for later initialization");
         return ESP_OK;
     }
 
     pcnt_glitch_filter_config_t filterConfig = {.max_glitch_ns = ns};
-    const esp_err_t result = pcnt_unit_set_glitch_filter(s_pcntUnit, &filterConfig);
+    const esp_err_t result = pcnt_unit_set_glitch_filter(pcntUnit, &filterConfig);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_set_glitch_filter failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -538,7 +541,7 @@ uint32_t Encoder::getGlitchFilterNs() const noexcept {
 esp_err_t Encoder::initPcnt() {
     ESP_LOGI(TAG, "Initializing PCNT unit");
 
-    pcnt_unit_config_t localCfg = encoderConfig.unitConfig;
+    pcnt_unit_config_t localUnitConfig = encoderConfig.unitConfig;
 
     int requestedLow = encoderConfig.watchLowLimit;
     int requestedHigh = encoderConfig.watchHighLimit;
@@ -554,10 +557,10 @@ esp_err_t Encoder::initPcnt() {
 
     ESP_LOGI(TAG, "PCNT limits: low=%d, high=%d", lowLimit, highLimit);
 
-    localCfg.low_limit = lowLimit;
-    localCfg.high_limit = highLimit;
+    localUnitConfig.low_limit = lowLimit;
+    localUnitConfig.high_limit = highLimit;
 
-    const esp_err_t result = pcnt_new_unit(&localCfg, &s_pcntUnit);
+    const esp_err_t result = pcnt_new_unit(&localUnitConfig, &pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_new_unit failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -575,8 +578,8 @@ esp_err_t Encoder::initPcntFilter() {
 
     ESP_LOGI(TAG, "Setting up glitch filter: %" PRIu32 " ns", encoderConfig.filterThresholdNs);
 
-    pcnt_glitch_filter_config_t filterCfg = {.max_glitch_ns = encoderConfig.filterThresholdNs};
-    const esp_err_t result = pcnt_unit_set_glitch_filter(s_pcntUnit, &filterCfg);
+    pcnt_glitch_filter_config_t glitchFilterConfig = {.max_glitch_ns = encoderConfig.filterThresholdNs};
+    const esp_err_t result = pcnt_unit_set_glitch_filter(pcntUnit, &glitchFilterConfig);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_set_glitch_filter failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -589,14 +592,14 @@ esp_err_t Encoder::initPcntFilter() {
 esp_err_t Encoder::initPcntIo() {
     ESP_LOGI(TAG, "Configuring GPIO pins (A=%d, B=%d, pullup=%s)", encoderConfig.pinA, encoderConfig.pinB, encoderConfig.openCollectorInputs ? "ON" : "OFF");
 
-    gpio_config_t ioCfg = {};
-    ioCfg.pin_bit_mask = (1ULL << encoderConfig.pinA) | (1ULL << encoderConfig.pinB);
-    ioCfg.mode = GPIO_MODE_INPUT;
-    ioCfg.pull_up_en = encoderConfig.openCollectorInputs ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
-    ioCfg.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    ioCfg.intr_type = GPIO_INTR_DISABLE;
+    gpio_config_t gpioConfig = {};
+    gpioConfig.pin_bit_mask = (1ULL << encoderConfig.pinA) | (1ULL << encoderConfig.pinB);
+    gpioConfig.mode = GPIO_MODE_INPUT;
+    gpioConfig.pull_up_en = encoderConfig.openCollectorInputs ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
+    gpioConfig.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    gpioConfig.intr_type = GPIO_INTR_DISABLE;
 
-    esp_err_t result = gpio_config(&ioCfg);
+    esp_err_t result = gpio_config(&gpioConfig);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "gpio_config failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -604,10 +607,10 @@ esp_err_t Encoder::initPcntIo() {
 
     ESP_LOGI(TAG, "Creating PCNT channels");
 
-    pcnt_chan_config_t chA = {.edge_gpio_num = encoderConfig.pinA, .level_gpio_num = encoderConfig.pinB, .flags = {}};
-    pcnt_chan_config_t chB = {.edge_gpio_num = encoderConfig.pinB, .level_gpio_num = encoderConfig.pinA, .flags = {}};
+    pcnt_chan_config_t channelAConfig = {.edge_gpio_num = encoderConfig.pinA, .level_gpio_num = encoderConfig.pinB, .flags = {}};
+    pcnt_chan_config_t channelBConfig = {.edge_gpio_num = encoderConfig.pinB, .level_gpio_num = encoderConfig.pinA, .flags = {}};
 
-    result = pcnt_new_channel(s_pcntUnit, &chA, &chanA);
+    result = pcnt_new_channel(pcntUnit, &channelAConfig, &chanA);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_new_channel(A) failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -625,7 +628,7 @@ esp_err_t Encoder::initPcntIo() {
         return result;
     }
 
-    result = pcnt_new_channel(s_pcntUnit, &chB, &chanB);
+    result = pcnt_new_channel(pcntUnit, &channelBConfig, &chanB);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_new_channel(B) failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -655,13 +658,13 @@ esp_err_t Encoder::initWatchPoint() {
 
     ESP_LOGI(TAG, "Setting up watch points (low=%d, high=%d)", lowLimit, highLimit);
 
-    esp_err_t result = pcnt_unit_add_watch_point(s_pcntUnit, lowLimit);
+    esp_err_t result = pcnt_unit_add_watch_point(pcntUnit, lowLimit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "add_watch_point(low) failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
     }
 
-    result = pcnt_unit_add_watch_point(s_pcntUnit, highLimit);
+    result = pcnt_unit_add_watch_point(pcntUnit, highLimit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "add_watch_point(high) failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -670,7 +673,7 @@ esp_err_t Encoder::initWatchPoint() {
     pcnt_event_callbacks_t callbacks = {};
     callbacks.on_reach = &Encoder::pcntOnReachCallback;
 
-    result = pcnt_unit_register_event_callbacks(s_pcntUnit, &callbacks, this);
+    result = pcnt_unit_register_event_callbacks(pcntUnit, &callbacks, this);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "register_event_callbacks failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -683,19 +686,19 @@ esp_err_t Encoder::initWatchPoint() {
 esp_err_t Encoder::enablePcUnit() {
     ESP_LOGI(TAG, "Enabling PCNT unit");
 
-    esp_err_t result = pcnt_unit_enable(s_pcntUnit);
+    esp_err_t result = pcnt_unit_enable(pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_enable failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
     }
 
-    result = pcnt_unit_clear_count(s_pcntUnit);
+    result = pcnt_unit_clear_count(pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_clear_count failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
     }
 
-    result = pcnt_unit_start(s_pcntUnit);
+    result = pcnt_unit_start(pcntUnit);
     if (result != ESP_OK) {
         ESP_LOGE(TAG, "pcnt_unit_start failed: %s (0x%x)", esp_err_to_name(result), result);
         return result;
@@ -735,7 +738,7 @@ void Encoder::timerCallback(void* arg) {
 
     do {
         baseBefore = self->baseCount;
-        pcnt_unit_get_count(s_pcntUnit, &countSnapshot);
+        pcnt_unit_get_count(self->pcntUnit, &countSnapshot);
         baseAfter = self->baseCount;
     } while (baseBefore != baseAfter);
 
@@ -807,12 +810,12 @@ void Encoder::releaseResources() {
         ESP_LOGD(TAG, "Timer deleted");
     }
 
-    if (s_pcntUnit != nullptr) {
-        const esp_err_t stopRes = pcnt_unit_stop(s_pcntUnit);
+    if (pcntUnit != nullptr) {
+        const esp_err_t stopRes = pcnt_unit_stop(pcntUnit);
         if (stopRes != ESP_OK) {
             ESP_LOGW(TAG, "pcnt_unit_stop failed: %s (0x%x)", esp_err_to_name(stopRes), stopRes);
         }
-        const esp_err_t disRes = pcnt_unit_disable(s_pcntUnit);
+        const esp_err_t disRes = pcnt_unit_disable(pcntUnit);
         if (disRes != ESP_OK) {
             ESP_LOGW(TAG, "pcnt_unit_disable failed: %s (0x%x)", esp_err_to_name(disRes), disRes);
         }
@@ -837,12 +840,12 @@ void Encoder::releaseResources() {
         ESP_LOGD(TAG, "Channel B deleted");
     }
 
-    if (s_pcntUnit != nullptr) {
-        const esp_err_t delU = pcnt_del_unit(s_pcntUnit);
+    if (pcntUnit != nullptr) {
+        const esp_err_t delU = pcnt_del_unit(pcntUnit);
         if (delU != ESP_OK) {
             ESP_LOGW(TAG, "pcnt_del_unit failed: %s (0x%x)", esp_err_to_name(delU), delU);
         }
-        s_pcntUnit = nullptr;
+        pcntUnit = nullptr;
         ESP_LOGD(TAG, "PCNT unit deleted");
     }
 

@@ -12,6 +12,8 @@
 
 #include <cstdint>
 
+#include "IPIDController.hpp"
+
 namespace DC_Motor_Controller_Firmware {
 namespace PID {
 
@@ -37,80 +39,71 @@ struct PidConfig {
  * @brief Implements a discrete PID controller with smoothing, clamping, and
  * settle detection.
  */
-class PIDController {
+class PIDController : public IPIDController {
   public:
     /**
      * @brief Constructor to initialize the PID controller with config values.
-     *
-     * @param cfg Constant reference to PidConfig struct
+     * @param pidConfig Constant reference to PidConfig struct.
      */
-    explicit PIDController(const PidConfig& cfg);
+    explicit PIDController(const PidConfig& pidConfig);
 
     /**
      * @brief Destructor.
      */
-    ~PIDController();
+    ~PIDController() override;
 
     /**
      * @brief Reset all internal state (integral, error, derivative).
      */
-    void reset();
+    void reset() override;
 
     /**
      * @brief Compute the PID output based on current setpoint and measurement.
-     *
-     * @param setpoint Desired target value
-     * @param actual Actual measured value
-     * @return float PID controller output (clamped)
+     * @param setpoint Desired target value.
+     * @param actual Actual measured value.
+     * @return PID controller output (clamped).
      */
-    float compute(float setpoint, float actual);
+    float compute(float setpoint, float actual) override;
 
     /**
      * @brief Set new PID parameters (kp, ki, kd).
-     *
-     * @param kp Proportional gain
-     * @param ki Integral gain
-     * @param kd Derivative gain
+     * @param kp Proportional gain.
+     * @param ki Integral gain.
+     * @param kd Derivative gain.
      */
-    void setParameters(float kp, float ki, float kd);
+    void setParameters(float kp, float ki, float kd) override;
 
     /**
      * @brief Get current PID parameters.
-     *
-     * @param kp Proportional gain (output)
-     * @param ki Integral gain (output)
-     * @param kd Derivative gain (output)
+     * @param kp Proportional gain (output).
+     * @param ki Integral gain (output).
+     * @param kd Derivative gain (output).
      */
-    void getParameters(float& kp, float& ki, float& kd);
+    void getParameters(float& kp, float& ki, float& kd) override;
 
     /**
      * @brief Check if the controller has settled (within tolerance for time).
-     *
-     * @return true if settled
-     * @return false if still adjusting
+     * @return true if settled, false if still adjusting.
      */
-    bool isSettled() const;
+    bool isSettled() const override;
 
     /**
      * @brief Get the last computed error value.
-     *
-     * @return float Last error
+     * @return Last error.
      */
-    float getLastError() const;
+    float getLastError() const override;
 
     /**
      * @brief Get the last computed derivative value.
-     *
-     * @return float Last derivative
+     * @return Last derivative.
      */
-    float getLastDerivative() const;
+    float getLastDerivative() const override;
 
     /**
      * @brief Get the last output value from compute().
-     *
-     * @return float Last PID output
+     * @return Last PID output.
      */
-    float getOutput() const;
+    float getOutput() const override;
 
   private:
     PidConfig config;  ///< Configuration struct

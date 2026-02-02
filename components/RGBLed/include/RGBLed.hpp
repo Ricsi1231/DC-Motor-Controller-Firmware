@@ -17,22 +17,12 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include "IRGBLed.hpp"
+
 namespace DC_Motor_Controller_Firmware {
 namespace RGB {
 
-/**
- * @enum PresetColor
- * @brief Predefined color preset.
- */
-enum class PresetColor {
-    RED,
-    GREEN,
-    BLUE,
-    YELLOW,
-    CYAN,
-    MAGENTA,
-    WHITE
-};
+using PresetColor = DC_Motor_Controller_Firmware::PresetColor;
 
 /**
  * @struct ledIoConfig
@@ -52,7 +42,7 @@ struct ledIoConfig {
  * @class RGBLed
  * @brief Controls a common-cathode RGB LED using PWM fading and color presets.
  */
-class RGBLed {
+class RGBLed : public IRGBLed {
   public:
     /**
      * @brief Constructor.
@@ -63,62 +53,57 @@ class RGBLed {
     /**
      * @brief Destructor.
      */
-    ~RGBLed();
+    ~RGBLed() override;
 
     /**
      * @brief Initializes GPIOs and PWM channels for RGB control.
      * @return ESP_OK if successful.
      */
-    esp_err_t init();
+    esp_err_t init() override;
 
     /**
-     * @brief Smoothly fade to a specific RGB color using percentage input
-     * (0–100%).
-     *
-     * This method maps percentage values to internal 8-bit brightness and
-     * performs a smooth transition over the specified duration.
-     *
-     * @param targetRed Target red brightness (0–100%)
-     * @param targetGreen Target green brightness (0–100%)
-     * @param targetBlue Target blue brightness (0–100%)
-     * @param durationMs Total fade duration in milliseconds
+     * @brief Smoothly fade to a specific RGB color using percentage input (0–100%).
+     * @param targetRed Target red brightness (0–100%).
+     * @param targetGreen Target green brightness (0–100%).
+     * @param targetBlue Target blue brightness (0–100%).
+     * @param durationMs Total fade duration in milliseconds.
      */
-    void fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs);
+    void fadeToColor(uint8_t targetRed, uint8_t targetGreen, uint8_t targetBlue, uint16_t durationMs) override;
 
     /**
      * @brief Set color using a predefined color enum.
-     * @param color PresetColor enum (e.g. RED, GREEN, etc.)
+     * @param color PresetColor enum (e.g. RED, GREEN, etc.).
      */
-    void setColor(PresetColor color);
+    void setColor(PresetColor color) override;
 
     /**
      * @brief Blink the LED using the current or last-set color.
-     * @param blinkDelay Delay between on/off cycles (ms)
-     * @param blinkTimes Number of blinks
+     * @param blinkDelay Delay between on/off cycles (ms).
+     * @param blinkTimes Number of blinks.
      */
-    void blinkLed(uint8_t blinkDelay, uint8_t blinkTimes);
+    void blinkLed(uint8_t blinkDelay, uint8_t blinkTimes) override;
 
     /**
      * @brief Set the global brightness of the LED (affects all channels).
-     * @param percent Brightness (0–100%)
+     * @param percent Brightness (0–100%).
      */
-    void setBrightness(uint8_t percent);
+    void setBrightness(uint8_t percent) override;
 
     /**
      * @brief Turn off all LED channels.
      */
-    void turnOffLed();
+    void turnOffLed() override;
 
     /**
      * @brief Restore last color and turn the LED on.
      */
-    void turnOnLed();
+    void turnOnLed() override;
 
     /**
      * @brief Returns whether the LED is currently on.
      * @return true if LED is on, false if off.
      */
-    bool isOn() const;
+    bool isOn() const override;
 
   private:
     ledIoConfig config;  ///< IO + PWM config struct
