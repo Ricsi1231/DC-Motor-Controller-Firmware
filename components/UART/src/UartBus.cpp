@@ -29,6 +29,8 @@ UartBus::~UartBus() {
 UartBus::UartBus(UartBus&& other) noexcept
     : config(other.config), initialized(other.initialized), deviceAdded(other.deviceAdded), busy(other.busy.load()), busMutex(other.busMutex) {
     other.initialized = false;
+    other.deviceAdded = false;
+    other.busy.store(false);
     other.busMutex = nullptr;
 }
 
@@ -46,6 +48,8 @@ UartBus& UartBus::operator=(UartBus&& other) noexcept {
         busy.store(other.busy.load());
         busMutex = other.busMutex;
         other.initialized = false;
+        other.deviceAdded = false;
+        other.busy.store(false);
         other.busMutex = nullptr;
     }
     return *this;
@@ -114,8 +118,15 @@ BusStatus UartBus::deinit() {
         return BusStatus::NOT_INITIALIZED;
     }
 
-    uart_flush(config.port);
-    uart_driver_delete(config.port);
+    esp_err_t flushRet = uart_flush(config.port);
+    if (flushRet != ESP_OK) {
+        ESP_LOGW(TAG, "uart_flush failed: %s", esp_err_to_name(flushRet));
+    }
+
+    esp_err_t deleteRet = uart_driver_delete(config.port);
+    if (deleteRet != ESP_OK) {
+        ESP_LOGE(TAG, "uart_driver_delete failed: %s", esp_err_to_name(deleteRet));
+    }
 
     initialized = false;
     deviceAdded = false;
@@ -157,11 +168,6 @@ BusStatus UartBus::addDevice(const DeviceDescriptor& descriptor) {
 }
 
 BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex) {
-    if (!initialized) {
-        ESP_LOGE(TAG, "Not initialized");
-        return BusStatus::NOT_INITIALIZED;
-    }
-
     if (txData == nullptr || txSize == 0) {
         return BusStatus::INVALID_ARGUMENT;
     }
@@ -171,6 +177,14 @@ BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex
             ESP_LOGW(TAG, "Failed to acquire mutex");
             return BusStatus::TIMEOUT;
         }
+    }
+
+    if (!initialized) {
+        ESP_LOGE(TAG, "Not initialized");
+        if (takeMutex) {
+            unlockBus();
+        }
+        return BusStatus::NOT_INITIALIZED;
     }
 
     busy.store(true);
@@ -205,11 +219,6 @@ BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex
 }
 
 BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint8_t* rxData, size_t* rxSize, bool takeMutex) {
-    if (!initialized) {
-        ESP_LOGE(TAG, "Not initialized");
-        return BusStatus::NOT_INITIALIZED;
-    }
-
     if (rxData == nullptr || rxSize == nullptr || *rxSize == 0) {
         return BusStatus::INVALID_ARGUMENT;
     }
@@ -219,6 +228,14 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
             ESP_LOGW(TAG, "Failed to acquire mutex");
             return BusStatus::TIMEOUT;
         }
+    }
+
+    if (!initialized) {
+        ESP_LOGE(TAG, "Not initialized");
+        if (takeMutex) {
+            unlockBus();
+        }
+        return BusStatus::NOT_INITIALIZED;
     }
 
     busy.store(true);
@@ -279,7 +296,10 @@ BusStatus UartBus::abort() {
         return BusStatus::NOT_INITIALIZED;
     }
 
-    uart_flush(config.port);
+    esp_err_t flushRet = uart_flush(config.port);
+    if (flushRet != ESP_OK) {
+        ESP_LOGW(TAG, "uart_flush failed: %s", esp_err_to_name(flushRet));
+    }
     busy.store(false);
 
     ESP_LOGI(TAG, "Transfer aborted, buffers flushed");

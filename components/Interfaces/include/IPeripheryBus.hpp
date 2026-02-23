@@ -51,6 +51,25 @@ struct DeviceDescriptor {
 /**
  * @class IPeripheryBus
  * @brief Abstract interface for a low-level periphery bus.
+ *
+ * @par Thread safety
+ * Implementations must be thread-safe. All public methods that access
+ * hardware or shared state must be serialized through an internal mutex.
+ * The @c takeMutex parameter on transfer methods allows the caller to
+ * opt out of internal locking when the caller already holds the bus
+ * mutex (e.g. for multi-step atomic sequences). isBusy() is lock-free
+ * and may be called from any context.
+ *
+ * @par Lifecycle
+ * Callers must follow this ordering:
+ *   1. Construct the bus object.
+ *   2. Call init() exactly once.
+ *   3. Call addDevice() for each device on the bus.
+ *   4. Call transfer() / transferAndReceive() as needed.
+ *   5. Call deinit() when finished (safe to omit if the destructor
+ *      handles cleanup).
+ * Calling transfer methods before init() or addDevice() returns
+ * @c BusStatus::NOT_INITIALIZED.
  */
 class IPeripheryBus {
   public:
@@ -98,7 +117,8 @@ class IPeripheryBus {
      * @param txData Pointer to the data buffer to send (may be nullptr for receive-only).
      * @param txSize Number of bytes to send.
      * @param rxData Pointer to the buffer to store received data.
-     * @param rxSize On input: buffer capacity; on output: actual bytes received.
+     * @param rxSize [in,out] On input: maximum bytes to read (buffer capacity).
+     *               On output: actual bytes received. Set to 0 on error.
      * @param takeMutex If true, acquire the bus mutex before the operation.
      * @return BusStatus::OK on success, else error status.
      */
