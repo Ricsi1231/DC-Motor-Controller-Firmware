@@ -9,11 +9,20 @@ using PeripheryBus::BusStatus;
 using PeripheryBus::DeviceDescriptor;
 using PeripheryBus::TypeId;
 
-UartBus::UartBus(const UartConfig& config) : config(config) {}
+UartBus::UartBus(const UartConfig& config) : config(config) {
+    busMutex = xSemaphoreCreateMutex();
+    if (busMutex == nullptr) {
+        ESP_LOGE(TAG, "Failed to create bus mutex");
+    }
+}
 
 UartBus::~UartBus() {
     if (initialized) {
         deinit();
+    }
+    if (busMutex != nullptr) {
+        vSemaphoreDelete(busMutex);
+        busMutex = nullptr;
     }
 }
 
@@ -27,6 +36,9 @@ UartBus& UartBus::operator=(UartBus&& other) noexcept {
     if (this != &other) {
         if (initialized) {
             deinit();
+        }
+        if (busMutex != nullptr) {
+            vSemaphoreDelete(busMutex);
         }
         config = other.config;
         initialized = other.initialized;
@@ -42,8 +54,14 @@ UartBus& UartBus::operator=(UartBus&& other) noexcept {
 TypeId UartBus::getType() const { return TypeId::UART; }
 
 BusStatus UartBus::init() {
+    if (!lockBus(busMutexTimeoutMs)) {
+        ESP_LOGE(TAG, "Failed to acquire mutex");
+        return BusStatus::TIMEOUT;
+    }
+
     if (initialized) {
         ESP_LOGW(TAG, "Already initialized");
+        unlockBus();
         return BusStatus::OK;
     }
 
@@ -60,73 +78,81 @@ BusStatus UartBus::init() {
     esp_err_t ret = uart_param_config(config.port, &uartConfig);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "uart_param_config failed: %s", esp_err_to_name(ret));
+        unlockBus();
         return BusStatus::ERROR;
     }
 
     ret = uart_set_pin(config.port, config.txPin, config.rxPin, config.rtsPin, config.ctsPin);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "uart_set_pin failed: %s", esp_err_to_name(ret));
+        unlockBus();
         return BusStatus::ERROR;
     }
 
     ret = uart_driver_install(config.port, static_cast<int>(config.rxBufferSize), static_cast<int>(config.txBufferSize), 0, nullptr, 0);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(ret));
-        return BusStatus::ERROR;
-    }
-
-    busMutex = xSemaphoreCreateMutex();
-    if (busMutex == nullptr) {
-        ESP_LOGE(TAG, "Failed to create bus mutex");
-        uart_driver_delete(config.port);
+        unlockBus();
         return BusStatus::ERROR;
     }
 
     initialized = true;
     ESP_LOGI(TAG, "Init done");
+    unlockBus();
     return BusStatus::OK;
 }
 
 BusStatus UartBus::deinit() {
+    if (!lockBus(busMutexTimeoutMs)) {
+        ESP_LOGE(TAG, "Failed to acquire mutex");
+        return BusStatus::TIMEOUT;
+    }
+
     if (!initialized) {
         ESP_LOGW(TAG, "Not initialized");
+        unlockBus();
         return BusStatus::NOT_INITIALIZED;
     }
 
     uart_flush(config.port);
     uart_driver_delete(config.port);
 
-    if (busMutex != nullptr) {
-        vSemaphoreDelete(busMutex);
-        busMutex = nullptr;
-    }
-
     initialized = false;
     deviceAdded = false;
     busy.store(false);
 
     ESP_LOGI(TAG, "Deinitialized");
+    unlockBus();
     return BusStatus::OK;
 }
 
 BusStatus UartBus::addDevice(const DeviceDescriptor& descriptor) {
+    if (!lockBus(busMutexTimeoutMs)) {
+        ESP_LOGE(TAG, "Failed to acquire mutex");
+        return BusStatus::TIMEOUT;
+    }
+
     if (!initialized) {
         ESP_LOGE(TAG, "Not initialized");
+        unlockBus();
         return BusStatus::NOT_INITIALIZED;
     }
 
     if (descriptor.id != 0) {
         ESP_LOGE(TAG, "UART is point-to-point, device id must be 0 (got %u)", descriptor.id);
+        unlockBus();
         return BusStatus::INVALID_ARGUMENT;
     }
 
     if (deviceAdded) {
         ESP_LOGE(TAG, "Device already added (UART supports only one device)");
+        unlockBus();
         return BusStatus::INVALID_ARGUMENT;
     }
 
     deviceAdded = true;
     ESP_LOGI(TAG, "Device added (id=%u, config=%" PRIu32 ")", descriptor.id, descriptor.config);
+    unlockBus();
     return BusStatus::OK;
 }
 
@@ -141,7 +167,7 @@ BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex
     }
 
     if (takeMutex) {
-        if (xSemaphoreTake(busMutex, pdMS_TO_TICKS(config.readTimeoutMs)) != pdTRUE) {
+        if (!lockBus(config.readTimeoutMs)) {
             ESP_LOGW(TAG, "Failed to acquire mutex");
             return BusStatus::TIMEOUT;
         }
@@ -154,7 +180,7 @@ BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex
         ESP_LOGE(TAG, "uart_write_bytes failed");
         busy.store(false);
         if (takeMutex) {
-            xSemaphoreGive(busMutex);
+            unlockBus();
         }
         return BusStatus::ERROR;
     }
@@ -164,7 +190,7 @@ BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex
         ESP_LOGE(TAG, "uart_wait_tx_done failed: %s", esp_err_to_name(ret));
         busy.store(false);
         if (takeMutex) {
-            xSemaphoreGive(busMutex);
+            unlockBus();
         }
         return BusStatus::TIMEOUT;
     }
@@ -172,7 +198,7 @@ BusStatus UartBus::transfer(const uint8_t* txData, size_t txSize, bool takeMutex
     busy.store(false);
 
     if (takeMutex) {
-        xSemaphoreGive(busMutex);
+        unlockBus();
     }
 
     return BusStatus::OK;
@@ -189,7 +215,7 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
     }
 
     if (takeMutex) {
-        if (xSemaphoreTake(busMutex, pdMS_TO_TICKS(config.readTimeoutMs)) != pdTRUE) {
+        if (!lockBus(config.readTimeoutMs)) {
             ESP_LOGW(TAG, "Failed to acquire mutex");
             return BusStatus::TIMEOUT;
         }
@@ -203,7 +229,7 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
             ESP_LOGE(TAG, "uart_write_bytes failed");
             busy.store(false);
             if (takeMutex) {
-                xSemaphoreGive(busMutex);
+                unlockBus();
             }
             return BusStatus::ERROR;
         }
@@ -213,7 +239,7 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
             ESP_LOGE(TAG, "uart_wait_tx_done failed: %s", esp_err_to_name(ret));
             busy.store(false);
             if (takeMutex) {
-                xSemaphoreGive(busMutex);
+                unlockBus();
             }
             return BusStatus::TIMEOUT;
         }
@@ -225,7 +251,7 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
         *rxSize = 0;
         busy.store(false);
         if (takeMutex) {
-            xSemaphoreGive(busMutex);
+            unlockBus();
         }
         return BusStatus::ERROR;
     }
@@ -234,7 +260,7 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
     busy.store(false);
 
     if (takeMutex) {
-        xSemaphoreGive(busMutex);
+        unlockBus();
     }
 
     return BusStatus::OK;
@@ -243,7 +269,13 @@ BusStatus UartBus::transferAndReceive(const uint8_t* txData, size_t txSize, uint
 bool UartBus::isBusy() const { return busy.load(); }
 
 BusStatus UartBus::abort() {
+    if (!lockBus(busMutexTimeoutMs)) {
+        ESP_LOGE(TAG, "Failed to acquire mutex");
+        return BusStatus::TIMEOUT;
+    }
+
     if (!initialized) {
+        unlockBus();
         return BusStatus::NOT_INITIALIZED;
     }
 
@@ -251,7 +283,30 @@ BusStatus UartBus::abort() {
     busy.store(false);
 
     ESP_LOGI(TAG, "Transfer aborted, buffers flushed");
+    unlockBus();
     return BusStatus::OK;
+}
+
+bool UartBus::lockBus(uint32_t timeoutMs) {
+    if (busMutex == nullptr) {
+        return false;
+    }
+
+    TickType_t ticks;
+    if (timeoutMs == portMAX_DELAY) {
+        ticks = portMAX_DELAY;
+    } else {
+        ticks = pdMS_TO_TICKS(timeoutMs);
+    }
+
+    BaseType_t takeResult = xSemaphoreTake(busMutex, ticks);
+    return (takeResult == pdTRUE);
+}
+
+void UartBus::unlockBus() {
+    if (busMutex != nullptr) {
+        xSemaphoreGive(busMutex);
+    }
 }
 
 }  // namespace UART

@@ -139,11 +139,24 @@ class UartBus : public PeripheryBus::IPeripheryBus {
     PeripheryBus::BusStatus abort() override;
 
   private:
+    /**
+     * @brief Acquire bus mutex with timeout.
+     * @param timeoutMs Timeout in milliseconds.
+     * @return true if lock acquired.
+     */
+    bool lockBus(uint32_t timeoutMs);
+
+    /**
+     * @brief Release bus mutex.
+     */
+    void unlockBus();
+
     UartConfig config;                     ///< UART configuration
     bool initialized = false;              ///< Initialization flag
     bool deviceAdded = false;              ///< Device registration flag
     std::atomic<bool> busy{false};         ///< Atomic busy flag for lock-free status reads
     SemaphoreHandle_t busMutex = nullptr;  ///< FreeRTOS mutex for thread-safe bus access
+    uint32_t busMutexTimeoutMs = 100;      ///< Mutex timeout (ms)
 
     static constexpr char TAG[] = "UartBus";  ///< Logging tag
 };
