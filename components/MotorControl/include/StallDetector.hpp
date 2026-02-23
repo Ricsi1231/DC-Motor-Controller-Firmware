@@ -100,17 +100,11 @@ class StallDetector {
     bool isWarming() const;
 
   private:
-    /** @brief Count of consecutive cycles where position did not change despite error. */
-    int stuckCounter = 0;
+    int stuckCounter = 0;      ///< Count of consecutive cycles where position did not change despite error.
+    int pidWarmupCounter = 0;  ///< Number of update cycles elapsed since last motion command reset.
+    int lastWarmupLimit = 0;   ///< Cached warmup limit for isWarming() queries between update() calls.
 
-    /** @brief Number of update cycles elapsed since last motion command reset. */
-    int pidWarmupCounter = 0;
-
-    /** @brief Cached warmup limit for isWarming() queries between update() calls. */
-    int lastWarmupLimit = 0;
-
-    /** @brief Log tag for ESP-IDF logging. */
-    static constexpr const char* TAG = "StallDetector";
+    static constexpr const char* TAG = "StallDetector";  ///< Log tag for ESP-IDF logging.
 };
 
 }  // namespace DC_Motor_Controller_Firmware::Control

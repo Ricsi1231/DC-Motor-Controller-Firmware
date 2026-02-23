@@ -26,9 +26,9 @@ class USB : public IComm {
      * @brief Struct to hold a received USB message.
      */
     typedef struct {
-        uint8_t buffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1]; /**< Internal RX buffer */
-        size_t bufferSize;                                 /**< Size of received data */
-        uint8_t itf;                                       /**< Interface ID */
+        uint8_t buffer[CONFIG_TINYUSB_CDC_RX_BUFSIZE + 1];  ///< Internal RX buffer
+        size_t bufferSize;                                 ///< Size of received data
+        uint8_t itf;                                       ///< Interface ID
     } usbMessage;
 
   public:

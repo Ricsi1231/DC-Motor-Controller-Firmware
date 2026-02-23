@@ -77,11 +77,9 @@ class SettleDetector {
     int getCount() const;
 
   private:
-    /** @brief Count of consecutive cycles where position and velocity are within tolerance. */
-    int settleCounter = 0;
+    int settleCounter = 0;  ///< Count of consecutive cycles where position and velocity are within tolerance.
 
-    /** @brief Log tag for ESP-IDF logging. */
-    static constexpr const char* TAG = "SettleDetector";
+    static constexpr const char* TAG = "SettleDetector";  ///< Log tag for ESP-IDF logging.
 };
 
 }  // namespace DC_Motor_Controller_Firmware::Control

@@ -348,98 +348,45 @@ class MotorController : public IMotorController {
     std::unique_ptr<Encoder::Encoder> encoder;  ///< Owned encoder instance.
     std::unique_ptr<PID::PIDController> pid;    ///< Owned PID controller instance.
 
-    /** @brief User-defined motion parameters and sub-component configurations. */
-    MotorControllerConfig config;
+    MotorControllerConfig config;   ///< User-defined motion parameters and sub-component configurations.
+    MotionProfiler profiler;        ///< Sub-component for trapezoid/S-curve speed shaping and slew-rate limiting.
+    SettleDetector settleDetector;  ///< Sub-component for detecting position and velocity settlement.
+    StallDetector stallDetector;    ///< Sub-component for stuck/stall detection with PID warmup gating.
+    SoftLimiter softLimiter;        ///< Sub-component for soft mechanical angle limit enforcement.
+    MotionGuard motionGuard;        ///< Sub-component for motion timeout and idle drift wake-up.
 
-    /** @brief Sub-component for trapezoid/S-curve speed shaping and slew-rate limiting. */
-    MotionProfiler profiler;
+    float target = 0;                    ///< Target position in degrees, protected by targetMutex.
+    std::atomic<bool> motionDone{true};  ///< True if motion is complete; atomic for lock-free reads from any context.
+    float lastPos = 0;                   ///< Last encoder position (deg) used for velocity estimation and stuck detection.
+    float lastPidOut = 0.0f;             ///< Last computed PID output value cached for status reporting.
+    float lastVelDegPerSec = 0.0f;       ///< Last estimated angular velocity (deg/s) cached for status reporting.
 
-    /** @brief Sub-component for detecting position and velocity settlement. */
-    SettleDetector settleDetector;
+    SemaphoreHandle_t targetMutex = nullptr;  ///< Mutex protecting the target variable for thread-safe access.
+    SemaphoreHandle_t configMutex = nullptr;  ///< Mutex protecting the config structure for thread-safe access.
 
-    /** @brief Sub-component for stuck/stall detection with PID warmup gating. */
-    StallDetector stallDetector;
+    TaskHandle_t taskHandle = nullptr;  ///< FreeRTOS task handle for the optional background control task.
+    uint32_t updateHz = 100;            ///< Background control update rate in Hertz.
 
-    /** @brief Sub-component for soft mechanical angle limit enforcement. */
-    SoftLimiter softLimiter;
+    BaseType_t controlTaskCoreId = tskNO_AFFINITY;  ///< Core affinity for xTaskCreatePinnedToCore(); tskNO_AFFINITY for no pinning.
+    UBaseType_t controlTaskPriority = 10;            ///< FreeRTOS priority for the control task.
+    bool notifyDriven = false;                       ///< If true, the control task waits on ulTaskNotifyTake() instead of polling.
+    TickType_t notifyBlockTicks = portMAX_DELAY;     ///< Max ticks to block waiting for a task notification.
 
-    /** @brief Sub-component for motion timeout and idle drift wake-up. */
-    MotionGuard motionGuard;
+    MotionEventCallback onMotionDoneCb = nullptr;  ///< Callback function pointer invoked when motion settles (done).
+    void* onMotionDoneUser = nullptr;              ///< Opaque user pointer passed to the onMotionDone callback.
+    MotionEventCallback onStallCb = nullptr;       ///< Callback function pointer invoked when a stall is detected.
+    void* onStallUser = nullptr;                   ///< Opaque user pointer passed to the onStall callback.
+    MotionEventCallback onLimitHitCb = nullptr;    ///< Callback function pointer invoked when a soft limit is hit.
+    void* onLimitHitUser = nullptr;                ///< Opaque user pointer passed to the onLimitHit callback.
 
-    /** @brief Target position in degrees, protected by targetMutex. */
-    float target = 0;
+    mutable float clampPreviousValue = NAN;  ///< Previous clamped value for log suppression in clampToPercentRange().
 
-    /** @brief True if motion is complete; atomic for lock-free reads from any context. */
-    std::atomic<bool> motionDone{true};
+    uint64_t lastPidLogUs = 0;     ///< Timestamp (us) for periodic PID logging throttle.
+    uint64_t lastStateLogUs = 0;   ///< Timestamp (us) for periodic state logging throttle.
+    uint64_t lastCmdLogUs = 0;     ///< Timestamp (us) for periodic command logging throttle.
+    uint64_t lastStatusLogUs = 0;  ///< Timestamp (us) for periodic status logging throttle.
 
-    /** @brief Last encoder position (deg) used for velocity estimation and stuck detection. */
-    float lastPos = 0;
-
-    /** @brief Last computed PID output value cached for status reporting. */
-    float lastPidOut = 0.0f;
-
-    /** @brief Last estimated angular velocity (deg/s) cached for status reporting. */
-    float lastVelDegPerSec = 0.0f;
-
-    /** @brief Mutex protecting the target variable for thread-safe access. */
-    SemaphoreHandle_t targetMutex = nullptr;
-
-    /** @brief Mutex protecting the config structure for thread-safe access. */
-    SemaphoreHandle_t configMutex = nullptr;
-
-    /** @brief FreeRTOS task handle for the optional background control task. */
-    TaskHandle_t taskHandle = nullptr;
-
-    /** @brief Background control update rate in Hertz. */
-    uint32_t updateHz = 100;
-
-    /** @brief Core affinity for xTaskCreatePinnedToCore(); tskNO_AFFINITY for no pinning. */
-    BaseType_t controlTaskCoreId = tskNO_AFFINITY;
-
-    /** @brief FreeRTOS priority for the control task. */
-    UBaseType_t controlTaskPriority = 10;
-
-    /** @brief If true, the control task waits on ulTaskNotifyTake() instead of polling. */
-    bool notifyDriven = false;
-
-    /** @brief Max ticks to block waiting for a task notification. */
-    TickType_t notifyBlockTicks = portMAX_DELAY;
-
-    /** @brief Callback function pointer invoked when motion settles (done). */
-    MotionEventCallback onMotionDoneCb = nullptr;
-
-    /** @brief Opaque user pointer passed to the onMotionDone callback. */
-    void* onMotionDoneUser = nullptr;
-
-    /** @brief Callback function pointer invoked when a stall is detected. */
-    MotionEventCallback onStallCb = nullptr;
-
-    /** @brief Opaque user pointer passed to the onStall callback. */
-    void* onStallUser = nullptr;
-
-    /** @brief Callback function pointer invoked when a soft limit is hit. */
-    MotionEventCallback onLimitHitCb = nullptr;
-
-    /** @brief Opaque user pointer passed to the onLimitHit callback. */
-    void* onLimitHitUser = nullptr;
-
-    /** @brief Previous clamped value for log suppression in clampToPercentRange(). */
-    mutable float clampPreviousValue = NAN;
-
-    /** @brief Timestamp (us) for periodic PID logging throttle. */
-    uint64_t lastPidLogUs = 0;
-
-    /** @brief Timestamp (us) for periodic state logging throttle. */
-    uint64_t lastStateLogUs = 0;
-
-    /** @brief Timestamp (us) for periodic command logging throttle. */
-    uint64_t lastCmdLogUs = 0;
-
-    /** @brief Timestamp (us) for periodic status logging throttle. */
-    uint64_t lastStatusLogUs = 0;
-
-    /** @brief Log tag for ESP-IDF logging. */
-    static constexpr const char* TAG = "MotorController";
+    static constexpr const char* TAG = "MotorController";  ///< Log tag for ESP-IDF logging.
 
     /**
      * @brief Clamp a PID output signal expressed in percent to [-100, 100].
