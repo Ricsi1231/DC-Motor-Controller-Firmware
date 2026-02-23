@@ -1,5 +1,9 @@
 build/
-.vscode
+# Ignore personal VSCode state, but track shared config
+.vscode/*
+!.vscode/c_cpp_properties.json
+!.vscode/settings.json
+!.vscode/extensions.json
 sdkconfig.old
 sdkconfig
 managed_components

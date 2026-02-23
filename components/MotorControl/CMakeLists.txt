@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "src/motorControl.cpp"
+    SRCS "src/MotorControl.cpp"
          "src/MotionProfiler.cpp"
          "src/SettleDetector.cpp"
          "src/StallDetector.cpp"

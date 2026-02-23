@@ -3,7 +3,7 @@
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "PID.hpp"
-#include "motorControl.hpp"
+#include "MotorControl.hpp"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;

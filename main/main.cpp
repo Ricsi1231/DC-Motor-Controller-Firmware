@@ -1,6 +1,6 @@
 #include "MotorCommHandler.hpp"
 #include "PeripheralSettings.hpp"
-#include "motorControl.hpp"
+#include "MotorControl.hpp"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
