@@ -95,17 +95,11 @@ class SoftLimiter {
     float getMaxDeg() const;
 
   private:
-    /** @brief Whether soft limit enforcement is active. */
-    bool enforced = false;
+    bool enforced = false;  ///< Whether soft limit enforcement is active.
+    float minDeg = 0.0f;    ///< Minimum allowed mechanical angle (deg).
+    float maxDeg = 0.0f;    ///< Maximum allowed mechanical angle (deg).
 
-    /** @brief Minimum allowed mechanical angle (deg). */
-    float minDeg = 0.0f;
-
-    /** @brief Maximum allowed mechanical angle (deg). */
-    float maxDeg = 0.0f;
-
-    /** @brief Log tag for ESP-IDF logging. */
-    static constexpr const char* TAG = "SoftLimiter";
+    static constexpr const char* TAG = "SoftLimiter";  ///< Log tag for ESP-IDF logging.
 };
 
 }  // namespace DC_Motor_Controller_Firmware::Control

@@ -105,23 +105,13 @@ class MotionProfiler {
     float getProfiledSpeed() const;
 
   private:
-    /** @brief Current profiled speed command (%), signed. */
-    float profSpeedPercent = 0.0f;
+    float profSpeedPercent = 0.0f;    ///< Current profiled speed command (%), signed.
+    float profAccelPctPerSec = 0.0f;  ///< Current acceleration state for S-curve profile (%/s).
+    uint64_t lastProfileUs = 0;       ///< Timestamp of last profile update (us).
+    float slewLastOutPct = 0.0f;      ///< Previous slew-rate-limited output (%).
+    uint64_t slewLastUs = 0;          ///< Timestamp of last slew-rate update (us).
 
-    /** @brief Current acceleration state for S-curve profile (%/s). */
-    float profAccelPctPerSec = 0.0f;
-
-    /** @brief Timestamp of last profile update (us). */
-    uint64_t lastProfileUs = 0;
-
-    /** @brief Previous slew-rate-limited output (%). */
-    float slewLastOutPct = 0.0f;
-
-    /** @brief Timestamp of last slew-rate update (us). */
-    uint64_t slewLastUs = 0;
-
-    /** @brief Log tag for ESP-IDF logging. */
-    static constexpr const char* TAG = "MotionProfiler";
+    static constexpr const char* TAG = "MotionProfiler";  ///< Log tag for ESP-IDF logging.
 };
 
 }  // namespace DC_Motor_Controller_Firmware::Control

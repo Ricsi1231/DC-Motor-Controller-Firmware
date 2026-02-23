@@ -37,7 +37,7 @@ ProjectRoot/
 │   ├── PID/                  # PID controller with anti-windup
 │   ├── RGBLed/               # RGB LED control via LEDC PWM
 │   ├── USB/                  # TinyUSB CDC interface
-│   └── motorControl/         # High-level motor controller (owns motor, encoder, PID)
+│   └── MotorControl/         # High-level motor controller (owns motor, encoder, PID)
 │       └── src/              # Includes MotionProfiler, StallDetector, SettleDetector,
 │                             # SoftLimiter, MotionGuard sub-components
 ├── main/

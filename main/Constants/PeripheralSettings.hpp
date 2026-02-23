@@ -3,12 +3,14 @@
 #include "DRV8876.hpp"
 #include "Encoder.hpp"
 #include "PID.hpp"
-#include "motorControl.hpp"
+#include "MotorControl.hpp"
+#include "UartBus.hpp"
 
 using namespace DC_Motor_Controller_Firmware::DRV8876;
 using namespace DC_Motor_Controller_Firmware::Encoder;
 using namespace DC_Motor_Controller_Firmware::PID;
 using namespace DC_Motor_Controller_Firmware::Control;
+using namespace DC_Motor_Controller_Firmware::UART;
 
 DRV8876Config motorDriverConfig = {
     .phPin = GPIO_NUM_4,
@@ -68,4 +70,20 @@ MotorControllerConfig motorControllerConfig = {
     .settle = {.posTolDeg = 2.0f, .velTolDegPerSec = 1.0f, .countLimit = 5},
     .stall = {.stuckPositionEpsilon = 0.05f, .stuckCountLimit = 50, .pidWarmupLimit = 10, .minErrorToMove = 0.2f},
     .guard = {.motionTimeoutMs = 0, .driftDeadband = 3.0f, .driftHysteresis = 1.0f},
+};
+
+UartConfig uartBusConfig = {
+    .port = UART_NUM_1,
+    .txPin = GPIO_NUM_17,
+    .rxPin = GPIO_NUM_18,
+    .rtsPin = GPIO_NUM_NC,
+    .ctsPin = GPIO_NUM_NC,
+    .baudRate = 115200,
+    .dataBits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_DISABLE,
+    .stopBits = UART_STOP_BITS_1,
+    .flowControl = UART_HW_FLOWCTRL_DISABLE,
+    .rxBufferSize = 1024,
+    .txBufferSize = 0,
+    .readTimeoutMs = 100,
 };

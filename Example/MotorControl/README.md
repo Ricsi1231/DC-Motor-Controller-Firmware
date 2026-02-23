@@ -192,4 +192,4 @@ Status - Pos:  45.23 deg | Target:  45.00 deg | Error: -0.23 deg | Vel:   12.4 d
 
 ## Dependencies
 
-- `motorControl`, `DRV8876`, `Encoder`, `PID`, `Interfaces` components
+- `MotorControl`, `DRV8876`, `Encoder`, `PID`, `Interfaces` components

@@ -110,11 +110,9 @@ class MotionGuard {
     uint64_t getMotionStartUs() const;
 
   private:
-    /** @brief Timestamp (us) when the current motion command was initiated; 0 if inactive. */
-    uint64_t motionStartUs = 0;
+    uint64_t motionStartUs = 0;  ///< Timestamp (us) when the current motion command was initiated; 0 if inactive.
 
-    /** @brief Log tag for ESP-IDF logging. */
-    static constexpr const char* TAG = "MotionGuard";
+    static constexpr const char* TAG = "MotionGuard";  ///< Log tag for ESP-IDF logging.
 };
 
 }  // namespace DC_Motor_Controller_Firmware::Control
