@@ -368,9 +368,9 @@ class MotorController : public IMotorController {
     uint32_t updateHz = 100;            ///< Background control update rate in Hertz.
 
     BaseType_t controlTaskCoreId = tskNO_AFFINITY;  ///< Core affinity for xTaskCreatePinnedToCore(); tskNO_AFFINITY for no pinning.
-    UBaseType_t controlTaskPriority = 10;            ///< FreeRTOS priority for the control task.
-    bool notifyDriven = false;                       ///< If true, the control task waits on ulTaskNotifyTake() instead of polling.
-    TickType_t notifyBlockTicks = portMAX_DELAY;     ///< Max ticks to block waiting for a task notification.
+    UBaseType_t controlTaskPriority = 10;           ///< FreeRTOS priority for the control task.
+    bool notifyDriven = false;                      ///< If true, the control task waits on ulTaskNotifyTake() instead of polling.
+    TickType_t notifyBlockTicks = portMAX_DELAY;    ///< Max ticks to block waiting for a task notification.
 
     MotionEventCallback onMotionDoneCb = nullptr;  ///< Callback function pointer invoked when motion settles (done).
     void* onMotionDoneUser = nullptr;              ///< Opaque user pointer passed to the onMotionDone callback.

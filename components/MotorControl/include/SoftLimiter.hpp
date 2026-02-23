@@ -96,8 +96,8 @@ class SoftLimiter {
 
   private:
     bool enforced = false;  ///< Whether soft limit enforcement is active.
-    float minDeg = 0.0f;   ///< Minimum allowed mechanical angle (deg).
-    float maxDeg = 0.0f;   ///< Maximum allowed mechanical angle (deg).
+    float minDeg = 0.0f;    ///< Minimum allowed mechanical angle (deg).
+    float maxDeg = 0.0f;    ///< Maximum allowed mechanical angle (deg).
 
     static constexpr const char* TAG = "SoftLimiter";  ///< Log tag for ESP-IDF logging.
 };
