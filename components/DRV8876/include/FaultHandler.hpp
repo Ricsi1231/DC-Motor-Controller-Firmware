@@ -9,6 +9,7 @@
 #pragma once
 
 #include "driver/gpio.h"
+#include "esp_attr.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include <atomic>
@@ -71,7 +72,7 @@ class FaultHandler {
      * @brief ISR handler for nFAULT negative edge.
      * @param arg Pointer to FaultHandler instance.
      */
-    static IRAM_ATTR void faultISR(void* arg);
+    static void IRAM_ATTR faultISR(void* arg);
 
     gpio_num_t nFaultPin = GPIO_NUM_NC;      ///< Fault detect pin
     std::atomic_bool faultTriggered{false};  ///< Atomic fault flag
