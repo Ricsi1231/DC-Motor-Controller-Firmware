@@ -9,59 +9,67 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.11
-
-      - name: Install tools
-        run: |
-          sudo apt update
-          sudo apt install -y clang-format cppcheck
-
-      - name: Install ESP-IDF
-        run: |
-          git clone --recursive https://github.com/espressif/esp-idf.git
-          cd esp-idf
-          ./install.sh
+        uses: actions/checkout@v4
 
       - name: Build firmware (ESP32-S3)
-        run: |
-          . ./esp-idf/export.sh
-          idf.py set-target esp32s3
-          idf.py build
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.4.1
+          target: esp32s3
+          path: '.'
 
-      - name: Run clang-format
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
         run: |
-          echo "Running clang-format (excluding ESP-IDF and managed stuff)..."
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Run clang-format check
+        run: |
           find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
             -not -path "./build/*" \
-            -not -path "./esp-idf/*" \
             -not -path "./managed_components/*" \
-            -not -path "./components/esp_*/*" \
+            -not -path "./.git/*" \
+            -not -path "./.vscode/*" \
             -exec clang-format --dry-run --Werror {} +
 
-      - name: Run cppcheck
+  cppcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
         run: |
-          echo "Running cppcheck..."
-          cppcheck --enable=all --inconclusive --error-exitcode=1 \
-          --suppress=missingInclude \
-          --suppress=missingIncludeSystem \
-          --suppress=unusedStructMember \
-          --quiet \
-          --force \
-          --inline-suppr \
-          -i esp-idf \
-          -i managed_components \
-          -i build \
-          -i components/esp_* \
-          --file-list=<(find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
-            -not -path "./esp-idf/*" \
-            -not -path "./managed_components/*" \
-            -not -path "./build/*" \
-            -not -path "./components/esp_*/*")
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        shell: bash
+        run: |
+          cppcheck \
+            --enable=all \
+            --std=c++17 \
+            --inconclusive \
+            --error-exitcode=1 \
+            --suppress=missingInclude \
+            --suppress=missingIncludeSystem \
+            --suppress=unusedStructMember \
+            --suppress=unmatchedSuppression \
+            --suppress=checkersReport \
+            --quiet \
+            --force \
+            --inline-suppr \
+            -i build \
+            -i managed_components \
+            --file-list=<(find . -type f \( -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \) \
+              -not -path "./build/*" \
+              -not -path "./managed_components/*" \
+              -not -path "./.git/*")
